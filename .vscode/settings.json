@@ -1,0 +1,18 @@
+{
+  "files.exclude": {
+    "**/.git": true,
+    "**/.DS_Store": true
+  },
+  "files.watcherExclude": {
+    "**/bin/**": true,
+    "**/obj/**": true
+  },
+  "explorer.fileNesting.enabled": false,
+  "files.associations": {
+    "*.cs": "csharp"
+  },
+  "search.exclude": {
+    "**/bin": true,
+    "**/obj": true
+  }
+}

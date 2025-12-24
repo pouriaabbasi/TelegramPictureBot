@@ -8,12 +8,12 @@ public class PurchasePhotoConfiguration : IEntityTypeConfiguration<PurchasePhoto
 {
     public void Configure(EntityTypeBuilder<PurchasePhoto> builder)
     {
-        // Table Per Type (TPT) - جدول جداگانه برای PurchasePhoto
-        builder.ToTable("PurchasePhotos");
+        // TPH - All purchase types share the same table (Purchases)
+        // No ToTable() call needed
 
         // Relationships specific to PurchasePhoto
         builder.HasOne(pp => pp.Photo)
-            .WithMany(p => p.Purchases)
+            .WithMany()
             .HasForeignKey(pp => pp.PhotoId)
             .OnDelete(DeleteBehavior.Restrict);
 

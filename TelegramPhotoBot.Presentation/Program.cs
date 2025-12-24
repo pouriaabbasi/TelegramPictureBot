@@ -1,9 +1,50 @@
+using Microsoft.EntityFrameworkCore;
+using TelegramPhotoBot.Infrastructure.Data;
+using TelegramPhotoBot.Presentation.Extensions;
+
 namespace TelegramPhotoBot.Presentation;
 
 public class Program
 {
-    public static void Main(string[] args)
+    public static async Task Main(string[] args)
     {
-        // TODO: Initialize Telegram Bot
+        var builder = WebApplication.CreateBuilder(args);
+
+        // Add services
+        builder.Services.AddApplicationServices();
+        builder.Services.AddInfrastructureServices(builder.Configuration);
+        builder.Services.AddPresentationServices();
+
+        // Add controllers if using webhooks
+        builder.Services.AddControllers();
+
+        var app = builder.Build();
+
+        // Ensure database is created and seed test data (for development)
+        using (var scope = app.Services.CreateScope())
+        {
+            var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            await dbContext.Database.EnsureCreatedAsync();
+            
+            // Seed platform settings from appsettings.json (one-time)
+            var settingsRepo = scope.ServiceProvider.GetRequiredService<TelegramPhotoBot.Application.Interfaces.Repositories.IPlatformSettingsRepository>();
+            var unitOfWork = scope.ServiceProvider.GetRequiredService<TelegramPhotoBot.Application.Interfaces.IUnitOfWork>();
+            var configuration = scope.ServiceProvider.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>();
+            var settingsSeeder = new PlatformSettingsSeeder(settingsRepo, unitOfWork, configuration);
+            await settingsSeeder.SeedAsync();
+            
+            // Seed test data for local development
+            await Data.TestDataSeeder.SeedAsync(dbContext);
+        }
+
+        // Configure the HTTP request pipeline
+        app.UseHttpsRedirection();
+        app.UseAuthorization();
+        app.MapControllers();
+
+        // Telegram bot polling is started automatically by TelegramBotPollingService (BackgroundService)
+        // No need to manually start it here
+
+        await app.RunAsync();
     }
 }

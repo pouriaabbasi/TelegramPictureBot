@@ -11,6 +11,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TelegramPhotoBot.Infrastruc
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TelegramPhotoBot.Presentation", "TelegramPhotoBot.Presentation\TelegramPhotoBot.Presentation.csproj", "{9B329AF7-25CA-4090-AC11-731DB6945275}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TelegramPhotoBot.Tests", "TelegramPhotoBot.Tests\TelegramPhotoBot.Tests.csproj", "{FC3006B1-9035-4AF1-AD14-F66E530E9CBA}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -69,6 +71,18 @@ Global
 		{9B329AF7-25CA-4090-AC11-731DB6945275}.Release|x64.Build.0 = Release|Any CPU
 		{9B329AF7-25CA-4090-AC11-731DB6945275}.Release|x86.ActiveCfg = Release|Any CPU
 		{9B329AF7-25CA-4090-AC11-731DB6945275}.Release|x86.Build.0 = Release|Any CPU
+		{FC3006B1-9035-4AF1-AD14-F66E530E9CBA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FC3006B1-9035-4AF1-AD14-F66E530E9CBA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FC3006B1-9035-4AF1-AD14-F66E530E9CBA}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{FC3006B1-9035-4AF1-AD14-F66E530E9CBA}.Debug|x64.Build.0 = Debug|Any CPU
+		{FC3006B1-9035-4AF1-AD14-F66E530E9CBA}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{FC3006B1-9035-4AF1-AD14-F66E530E9CBA}.Debug|x86.Build.0 = Debug|Any CPU
+		{FC3006B1-9035-4AF1-AD14-F66E530E9CBA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FC3006B1-9035-4AF1-AD14-F66E530E9CBA}.Release|Any CPU.Build.0 = Release|Any CPU
+		{FC3006B1-9035-4AF1-AD14-F66E530E9CBA}.Release|x64.ActiveCfg = Release|Any CPU
+		{FC3006B1-9035-4AF1-AD14-F66E530E9CBA}.Release|x64.Build.0 = Release|Any CPU
+		{FC3006B1-9035-4AF1-AD14-F66E530E9CBA}.Release|x86.ActiveCfg = Release|Any CPU
+		{FC3006B1-9035-4AF1-AD14-F66E530E9CBA}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

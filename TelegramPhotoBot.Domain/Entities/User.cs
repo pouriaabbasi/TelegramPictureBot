@@ -1,3 +1,4 @@
+using TelegramPhotoBot.Domain.Enums;
 using TelegramPhotoBot.Domain.ValueObjects;
 
 namespace TelegramPhotoBot.Domain.Entities;
@@ -12,15 +13,23 @@ public class User : AggregateRoot
     public bool IsBot { get; private set; }
     public bool IsActive { get; private set; } = true;
     
+    // Role management (marketplace feature)
+    public UserRole Role { get; private set; }
+    
+    // Model relationship (if user is a model)
+    public Guid? ModelId { get; private set; }
+    public Model? Model { get; private set; }
+    
     // Navigation properties
-    private readonly List<UserRole> _userRoles = new();
-    public virtual IReadOnlyCollection<UserRole> UserRoles => _userRoles.AsReadOnly();
 
     private readonly List<Photo> _photos = new();
     public virtual IReadOnlyCollection<Photo> Photos => _photos.AsReadOnly();
 
     private readonly List<Subscription> _subscriptions = new();
     public virtual IReadOnlyCollection<Subscription> Subscriptions => _subscriptions.AsReadOnly();
+    
+    private readonly List<ModelSubscription> _modelSubscriptions = new();
+    public virtual IReadOnlyCollection<ModelSubscription> ModelSubscriptions => _modelSubscriptions.AsReadOnly();
 
     private readonly List<Purchase> _purchases = new();
     public virtual IReadOnlyCollection<Purchase> Purchases => _purchases.AsReadOnly();
@@ -42,6 +51,7 @@ public class User : AggregateRoot
         LastName = lastName;
         LanguageCode = languageCode;
         IsBot = isBot;
+        Role = UserRole.User; // Default role
     }
 
     public void UpdateProfile(string? firstName, string? lastName, string? username)
@@ -64,21 +74,40 @@ public class User : AggregateRoot
         MarkAsUpdated();
     }
 
-    // Methods for managing collections (EF Core backing fields)
-    public void AddRole(UserRole userRole)
+    // Role management methods
+    
+    public void PromoteToModel(Guid modelId)
     {
-        if (!_userRoles.Any(ur => ur.RoleId == userRole.RoleId))
-        {
-            _userRoles.Add(userRole);
-        }
+        if (Role == UserRole.Admin)
+            throw new InvalidOperationException("Admin cannot be demoted to model");
+            
+        Role = UserRole.Model;
+        ModelId = modelId;
+        MarkAsUpdated();
     }
 
-    public void RemoveRole(Guid roleId)
+    public void PromoteToAdmin()
     {
-        var userRole = _userRoles.FirstOrDefault(ur => ur.RoleId == roleId);
-        if (userRole != null)
-        {
-            _userRoles.Remove(userRole);
-        }
+        Role = UserRole.Admin;
+        ModelId = null; // Admins cannot be models
+        MarkAsUpdated();
     }
+
+    public void DemoteToUser()
+    {
+        if (Role == UserRole.Admin)
+            throw new InvalidOperationException("Cannot demote admin to user. Revoke admin status first.");
+            
+        Role = UserRole.User;
+        ModelId = null;
+        MarkAsUpdated();
+    }
+
+    public bool IsModel() => Role == UserRole.Model && ModelId.HasValue;
+    
+    public bool IsAdmin() => Role == UserRole.Admin;
+    
+    public bool CanAccessModelFeatures() => Role == UserRole.Model || Role == UserRole.Admin;
+    
+    public bool CanAccessAdminFeatures() => Role == UserRole.Admin;
 }

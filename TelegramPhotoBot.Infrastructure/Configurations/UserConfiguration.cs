@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using TelegramPhotoBot.Domain.Entities;
+using TelegramPhotoBot.Domain.Enums;
 using TelegramPhotoBot.Domain.ValueObjects;
 
 namespace TelegramPhotoBot.Infrastructure.Configurations;
@@ -19,6 +20,11 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
             telegramUserId.Property(tu => tu.Value)
                 .HasColumnName("TelegramUserId")
                 .IsRequired();
+            
+            // Create index on the owned entity property
+            telegramUserId.HasIndex(tu => tu.Value)
+                .IsUnique()
+                .HasDatabaseName("IX_Users_TelegramUserId");
         });
 
         builder.Property(u => u.Username)
@@ -32,27 +38,40 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
 
         builder.Property(u => u.LanguageCode)
             .HasMaxLength(10);
+        
+        // Marketplace properties
+        builder.Property(u => u.Role)
+            .IsRequired()
+            .HasConversion<int>()
+            .HasDefaultValue(UserRole.User);
+        
+        builder.Property(u => u.ModelId)
+            .IsRequired(false);
 
         // Configure backing fields for collections
-        builder.Metadata.FindNavigation(nameof(User.UserRoles))!
-            .SetPropertyAccessMode(PropertyAccessMode.Field);
+        // UserRoles collection is removed in marketplace version
+        // builder.Metadata.FindNavigation(nameof(User.UserRoles))!
+        //     .SetPropertyAccessMode(PropertyAccessMode.Field);
 
         builder.Metadata.FindNavigation(nameof(User.Photos))!
             .SetPropertyAccessMode(PropertyAccessMode.Field);
 
         builder.Metadata.FindNavigation(nameof(User.Subscriptions))!
             .SetPropertyAccessMode(PropertyAccessMode.Field);
+        
+        builder.Metadata.FindNavigation(nameof(User.ModelSubscriptions))!
+            .SetPropertyAccessMode(PropertyAccessMode.Field);
 
         builder.Metadata.FindNavigation(nameof(User.Purchases))!
             .SetPropertyAccessMode(PropertyAccessMode.Field);
 
         // Indexes
-        builder.HasIndex(u => u.TelegramUserId.Value)
-            .IsUnique()
-            .HasDatabaseName("IX_Users_TelegramUserId");
-
         builder.HasIndex(u => u.Username)
             .HasDatabaseName("IX_Users_Username");
+        
+        builder.HasIndex(u => u.Role)
+            .HasDatabaseName("IX_Users_Role")
+            .HasFilter("[IsDeleted] = 0");
     }
 }
 

@@ -8,8 +8,8 @@ public class PurchaseSubscriptionConfiguration : IEntityTypeConfiguration<Purcha
 {
     public void Configure(EntityTypeBuilder<PurchaseSubscription> builder)
     {
-        // Table Per Type (TPT) - جدول جداگانه برای PurchaseSubscription
-        builder.ToTable("PurchaseSubscriptions");
+        // TPH - All purchase types share the same table (Purchases)
+        // No ToTable() call needed
 
         // Relationships specific to PurchaseSubscription
         builder.HasOne(ps => ps.Subscription)

@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using TelegramPhotoBot.Domain.Entities;
+using TelegramPhotoBot.Domain.Enums;
 using TelegramPhotoBot.Domain.ValueObjects;
 
 namespace TelegramPhotoBot.Infrastructure.Configurations;
@@ -53,11 +54,28 @@ public class PhotoConfiguration : IEntityTypeConfiguration<Photo>
 
         builder.Property(p => p.Caption)
             .HasMaxLength(1000);
+        
+        // Marketplace properties
+        builder.Property(p => p.ModelId)
+            .IsRequired();
+        
+        builder.Property(p => p.Type)
+            .IsRequired()
+            .HasConversion<int>();
+
+        builder.Property(p => p.ViewCount)
+            .IsRequired()
+            .HasDefaultValue(0);
 
         // Relationships
         builder.HasOne(p => p.Seller)
             .WithMany(u => u.Photos)
             .HasForeignKey(p => p.SellerId)
+            .OnDelete(DeleteBehavior.Restrict);
+        
+        builder.HasOne(p => p.Model)
+            .WithMany(m => m.Photos)
+            .HasForeignKey(p => p.ModelId)
             .OnDelete(DeleteBehavior.Restrict);
 
         // Indexes
@@ -66,6 +84,14 @@ public class PhotoConfiguration : IEntityTypeConfiguration<Photo>
 
         builder.HasIndex(p => p.IsForSale)
             .HasDatabaseName("IX_Photos_IsForSale");
+        
+        builder.HasIndex(p => p.ModelId)
+            .HasDatabaseName("IX_Photos_ModelId")
+            .HasFilter("[IsDeleted] = 0");
+        
+        builder.HasIndex(p => new { p.ModelId, p.Type })
+            .HasDatabaseName("IX_Photos_ModelId_Type")
+            .HasFilter("[IsDeleted] = 0");
     }
 }
 

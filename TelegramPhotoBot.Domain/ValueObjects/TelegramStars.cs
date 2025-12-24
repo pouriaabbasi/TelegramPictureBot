@@ -57,8 +57,5 @@ public record TelegramStars
     }
 
     public static TelegramStars Zero => new(0);
-
-    public static implicit operator long(TelegramStars stars) => stars.Amount;
-    public static implicit operator TelegramStars(long amount) => new(amount);
 }
 

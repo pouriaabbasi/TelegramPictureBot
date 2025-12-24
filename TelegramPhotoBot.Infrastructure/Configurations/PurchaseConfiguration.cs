@@ -9,8 +9,15 @@ public class PurchaseConfiguration : IEntityTypeConfiguration<Purchase>
 {
     public void Configure(EntityTypeBuilder<Purchase> builder)
     {
-        // Table Per Type (TPT) - هر کلاس جدول جداگانه دارد
+        // Table Per Hierarchy (TPH) - All purchase types in a single table with discriminator
         builder.ToTable("Purchases");
+        
+        // Configure TPH discriminator
+        builder.HasDiscriminator<string>("PurchaseType")
+            .HasValue<Purchase>("Purchase")
+            .HasValue<PurchasePhoto>("PurchasePhoto")
+            .HasValue<PurchaseSubscription>("PurchaseSubscription")
+            .HasValue<ModelSubscription>("ModelSubscription");
 
         builder.HasKey(p => p.Id);
 
@@ -24,6 +31,27 @@ public class PurchaseConfiguration : IEntityTypeConfiguration<Purchase>
 
         builder.Property(p => p.PurchaseDate)
             .IsRequired();
+
+        builder.Property(p => p.PaymentStatus)
+            .HasConversion<int>()
+            .IsRequired();
+
+        builder.Property(p => p.TelegramPaymentId)
+            .HasMaxLength(255)
+            .IsRequired(false);
+
+        builder.Property(p => p.TelegramPreCheckoutQueryId)
+            .HasMaxLength(255)
+            .IsRequired(false);
+
+        builder.Property(p => p.PaymentVerifiedAt)
+            .IsRequired(false);
+
+        // Index for payment verification (prevent duplicate processing)
+        builder.HasIndex(p => p.TelegramPaymentId)
+            .HasDatabaseName("IX_Purchases_TelegramPaymentId")
+            .IsUnique()
+            .HasFilter("[TelegramPaymentId] IS NOT NULL");
 
         // Relationships
         builder.HasOne(p => p.User)

@@ -30,11 +30,21 @@ public class ContentDeliveryService : IContentDeliveryService
 
     public async Task<ContentDeliveryResult> SendPhotoAsync(SendPhotoRequest request, CancellationToken cancellationToken = default)
     {
-        // Validate contact before sending
-        var isContact = await ValidateContactAsync(request.RecipientTelegramUserId, cancellationToken);
+        // Validate contact before sending - catch exceptions to show error messages
+        bool isContact;
+        try
+        {
+            isContact = await ValidateContactAsync(request.RecipientTelegramUserId, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            // If there's an error checking contact, return error message
+            return ContentDeliveryResult.Failure($"❌ خطا در بررسی وضعیت کانتکت: {ex.Message}");
+        }
+
         if (!isContact)
         {
-            return ContentDeliveryResult.Failure(ContactRequiredMessage);
+            return ContentDeliveryResult.Failure("❌ لطفاً ابتدا حساب فرستنده را به کانتکت‌های خود اضافه کنید");
         }
 
         // Log view and increment view count if photoId is provided
@@ -72,11 +82,21 @@ public class ContentDeliveryService : IContentDeliveryService
 
     public async Task<ContentDeliveryResult> SendVideoAsync(SendVideoRequest request, CancellationToken cancellationToken = default)
     {
-        // Validate contact before sending
-        var isContact = await ValidateContactAsync(request.RecipientTelegramUserId, cancellationToken);
+        // Validate contact before sending - catch exceptions to show error messages
+        bool isContact;
+        try
+        {
+            isContact = await ValidateContactAsync(request.RecipientTelegramUserId, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            // If there's an error checking contact, return error message
+            return ContentDeliveryResult.Failure($"❌ خطا در بررسی وضعیت کانتکت: {ex.Message}");
+        }
+
         if (!isContact)
         {
-            return ContentDeliveryResult.Failure(ContactRequiredMessage);
+            return ContentDeliveryResult.Failure("❌ لطفاً ابتدا حساب فرستنده را به کانتکت‌های خود اضافه کنید");
         }
 
         // Send video via MTProto with self-destruct timer

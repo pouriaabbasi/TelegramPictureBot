@@ -38,6 +38,11 @@ public interface ITelegramBotService
     Task<bool> SendPhotoAsync(long chatId, string photoPath, string? caption = null, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Sends a video to a user
+    /// </summary>
+    Task<bool> SendVideoAsync(long chatId, string videoPath, string? caption = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Creates an invoice for Telegram Stars payment
     /// </summary>
     Task<string?> CreateInvoiceAsync(CreateInvoiceRequest request, CancellationToken cancellationToken = default);

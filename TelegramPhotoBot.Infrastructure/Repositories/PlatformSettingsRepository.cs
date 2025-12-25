@@ -35,7 +35,8 @@ public class PlatformSettingsRepository : Repository<PlatformSettings>, IPlatfor
             {
                 existing.UpdateDescription(description);
             }
-            await UpdateAsync(existing, cancellationToken);
+            // Entity is already tracked by EF Core, changes will be detected automatically
+            // No need to call UpdateAsync for tracked entities
         }
         else
         {

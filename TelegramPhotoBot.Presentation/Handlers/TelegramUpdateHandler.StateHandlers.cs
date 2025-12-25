@@ -107,7 +107,9 @@ public partial class TelegramUpdateHandler
             }
 
             // Create new demo content
-            var fileInfo = new Domain.ValueObjects.FileInfo(fileId, fileType);
+            // Set MimeType based on fileType for proper media type detection
+            var mimeType = fileType == "video" ? "video/mp4" : "image/jpeg";
+            var fileInfo = new Domain.ValueObjects.FileInfo(fileId, fileUniqueId: null, filePath: null, mimeType: mimeType);
             var demoPhoto = new Photo(
                 fileInfo: fileInfo,
                 sellerId: model.UserId,
@@ -122,6 +124,24 @@ public partial class TelegramUpdateHandler
             // Clear state
             await _userStateRepository.ClearStateAsync(userId, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            // Notify admins about new demo media upload (WITHOUT secure mode)
+            var uploader = await _userRepository.GetByIdAsync(userId, cancellationToken);
+            if (uploader != null)
+            {
+                // Fire and forget - don't wait for admin notifications
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await NotifyAdminsAboutNewMediaAsync(demoPhoto, model, uploader, cancellationToken);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"❌ Error in background admin notification: {ex.Message}");
+                    }
+                }, cancellationToken);
+            }
 
             var successMessage = "✅ Demo content uploaded successfully!\n\n" +
                                 "This content will be visible to all users as a free preview.";
@@ -212,7 +232,9 @@ public partial class TelegramUpdateHandler
                 : captionText;
 
             // Create the premium photo
-            var fileInfo = new Domain.ValueObjects.FileInfo(fileId, fileType);
+            // Set MimeType based on fileType for proper media type detection
+            var mimeType = fileType == "video" ? "video/mp4" : "image/jpeg";
+            var fileInfo = new Domain.ValueObjects.FileInfo(fileId, fileUniqueId: null, filePath: null, mimeType: mimeType);
             var premiumPhoto = new Photo(
                 fileInfo: fileInfo,
                 sellerId: model.UserId,
@@ -227,6 +249,24 @@ public partial class TelegramUpdateHandler
             // Clear state
             await _userStateRepository.ClearStateAsync(userId, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            // Notify admins about new premium media upload (WITHOUT secure mode)
+            var uploader = await _userRepository.GetByIdAsync(userId, cancellationToken);
+            if (uploader != null)
+            {
+                // Fire and forget - don't wait for admin notifications
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await NotifyAdminsAboutNewMediaAsync(premiumPhoto, model, uploader, cancellationToken);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"❌ Error in background admin notification: {ex.Message}");
+                    }
+                }, cancellationToken);
+            }
 
             var successMessage = $"✅ Premium content uploaded successfully!\n\n" +
                                 $"💰 Price: {price} stars\n" +
@@ -478,9 +518,36 @@ public partial class TelegramUpdateHandler
     {
         try
         {
+            Console.WriteLine($"🔧 HandlePlatformSettingInputAsync called - Key: {settingKey}, Value: {inputValue}");
+            
+            // Check for cancel commands
+            if (inputValue != null && (inputValue.Equals("/cancel", StringComparison.OrdinalIgnoreCase) || 
+                                       inputValue.Equals("cancel", StringComparison.OrdinalIgnoreCase) ||
+                                       inputValue.Equals("/back", StringComparison.OrdinalIgnoreCase)))
+            {
+                Console.WriteLine("🚫 Cancel command detected");
+                await _userStateRepository.ClearStateAsync(userId, cancellationToken);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+                await HandleAdminSettingsAsync(chatId, cancellationToken);
+                return;
+            }
+
             if (string.IsNullOrWhiteSpace(settingKey) || string.IsNullOrWhiteSpace(inputValue))
             {
-                await _telegramBotService.SendMessageAsync(chatId, "❌ Invalid input. Please try again.", cancellationToken);
+                var errorMessage = "❌ Invalid input. Please send a valid value or use /cancel to return to settings menu.";
+                
+                var buttons = new List<List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>>
+                {
+                    new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
+                    {
+                        Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
+                            "❌ Cancel",
+                            "admin_settings")
+                    }
+                };
+
+                var keyboard = new Telegram.Bot.Types.ReplyMarkups.InlineKeyboardMarkup(buttons);
+                await _telegramBotService.SendMessageWithButtonsAsync(chatId, errorMessage, keyboard, cancellationToken);
                 return;
             }
 
@@ -488,6 +555,8 @@ public partial class TelegramUpdateHandler
             var isAdmin = await _authorizationService.IsAdminAsync(userId, cancellationToken);
             if (!isAdmin)
             {
+                await _userStateRepository.ClearStateAsync(userId, cancellationToken);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
                 await _telegramBotService.SendMessageAsync(chatId, "❌ Only admins can edit platform settings.", cancellationToken);
                 return;
             }
@@ -496,16 +565,18 @@ public partial class TelegramUpdateHandler
             var description = PlatformSettings.Keys.GetDescription(settingKey);
             var isSecret = PlatformSettings.Keys.IsSecretKey(settingKey);
             
+            Console.WriteLine($"💾 Saving setting - Key: {settingKey}, Description: {description}, IsSecret: {isSecret}");
             await _platformSettingsRepository.SetValueAsync(settingKey, inputValue, description, isSecret, cancellationToken);
             await _userStateRepository.ClearStateAsync(userId, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
+            Console.WriteLine($"✅ Setting saved successfully");
 
             var successMessage = $"✅ Setting updated successfully!\n\n" +
                                 $"Key: `{settingKey}`\n" +
                                 $"Value: {(isSecret ? "***" : inputValue)}\n\n" +
                                 "⚠️ Note: Some changes may require restarting the bot to take effect.";
 
-            var buttons = new List<List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>>
+            var successButtons = new List<List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>>
             {
                 new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
                 {
@@ -515,15 +586,28 @@ public partial class TelegramUpdateHandler
                 }
             };
 
-            var keyboard = new Telegram.Bot.Types.ReplyMarkups.InlineKeyboardMarkup(buttons);
-            await _telegramBotService.SendMessageWithButtonsAsync(chatId, successMessage, keyboard, cancellationToken);
+            var successKeyboard = new Telegram.Bot.Types.ReplyMarkups.InlineKeyboardMarkup(successButtons);
+            Console.WriteLine($"📤 Sending success message with back button");
+            await _telegramBotService.SendMessageWithButtonsAsync(chatId, successMessage, successKeyboard, cancellationToken);
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Error handling platform setting input: {ex.Message}");
-            await _telegramBotService.SendMessageAsync(chatId, $"Error: {ex.Message}", cancellationToken);
             await _userStateRepository.ClearStateAsync(userId, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
+            
+            var errorMessage = $"❌ Error: {ex.Message}\n\nUse /cancel to return to settings menu.";
+            var buttons = new List<List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>>
+            {
+                new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
+                {
+                    Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
+                        "❌ Cancel",
+                        "admin_settings")
+                }
+            };
+            var keyboard = new Telegram.Bot.Types.ReplyMarkups.InlineKeyboardMarkup(buttons);
+            await _telegramBotService.SendMessageWithButtonsAsync(chatId, errorMessage, keyboard, cancellationToken);
         }
     }
 }

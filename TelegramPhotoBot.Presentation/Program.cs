@@ -20,21 +20,22 @@ public class Program
 
         var app = builder.Build();
 
-        // Ensure database is created and seed test data (for development)
+        // Apply database migrations
         using (var scope = app.Services.CreateScope())
         {
             var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-            await dbContext.Database.EnsureCreatedAsync();
+            await dbContext.Database.MigrateAsync();
             
+            // Seed data disabled - uncomment below if needed
             // Seed platform settings from appsettings.json (one-time)
-            var settingsRepo = scope.ServiceProvider.GetRequiredService<TelegramPhotoBot.Application.Interfaces.Repositories.IPlatformSettingsRepository>();
-            var unitOfWork = scope.ServiceProvider.GetRequiredService<TelegramPhotoBot.Application.Interfaces.IUnitOfWork>();
-            var configuration = scope.ServiceProvider.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>();
-            var settingsSeeder = new PlatformSettingsSeeder(settingsRepo, unitOfWork, configuration);
-            await settingsSeeder.SeedAsync();
+            // var settingsRepo = scope.ServiceProvider.GetRequiredService<TelegramPhotoBot.Application.Interfaces.Repositories.IPlatformSettingsRepository>();
+            // var unitOfWork = scope.ServiceProvider.GetRequiredService<TelegramPhotoBot.Application.Interfaces.IUnitOfWork>();
+            // var configuration = scope.ServiceProvider.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>();
+            // var settingsSeeder = new PlatformSettingsSeeder(settingsRepo, unitOfWork, configuration);
+            // await settingsSeeder.SeedAsync();
             
             // Seed test data for local development
-            await Data.TestDataSeeder.SeedAsync(dbContext);
+            // await Data.TestDataSeeder.SeedAsync(dbContext);
         }
 
         // Configure the HTTP request pipeline

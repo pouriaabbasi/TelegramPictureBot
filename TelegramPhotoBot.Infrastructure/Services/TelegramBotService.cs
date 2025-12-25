@@ -163,6 +163,56 @@ public class TelegramBotService : ITelegramBotService
         }
     }
 
+    public async Task<bool> SendVideoAsync(long chatId, string videoPathOrFileId, string? caption = null, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            // Check if it's a Telegram file ID (doesn't contain path separators and doesn't exist as a file)
+            if (!videoPathOrFileId.Contains(Path.DirectorySeparatorChar) && 
+                !videoPathOrFileId.Contains(Path.AltDirectorySeparatorChar) &&
+                !System.IO.File.Exists(videoPathOrFileId))
+            {
+                // It's a Telegram file ID - use it directly
+                Console.WriteLine($"Sending video using Telegram file ID: {videoPathOrFileId.Substring(0, Math.Min(20, videoPathOrFileId.Length))}...");
+                
+                await _botClient.SendVideoAsync(
+                    chatId: chatId,
+                    video: InputFile.FromFileId(videoPathOrFileId),
+                    caption: caption,
+                    cancellationToken: cancellationToken);
+                
+                return true;
+            }
+            else
+            {
+                // It's a file path - open and stream the file
+                if (!System.IO.File.Exists(videoPathOrFileId))
+                {
+                    Console.WriteLine($"Video file not found: {videoPathOrFileId}");
+                    return false;
+                }
+                
+                Console.WriteLine($"Sending video from file path: {videoPathOrFileId}");
+                
+                // Keep stream open during the entire send operation
+                using var stream = System.IO.File.OpenRead(videoPathOrFileId);
+                await _botClient.SendVideoAsync(
+                    chatId: chatId,
+                    video: InputFile.FromStream(stream, Path.GetFileName(videoPathOrFileId)),
+                    caption: caption,
+                    cancellationToken: cancellationToken);
+                
+                return true;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error sending video: {ex.Message}");
+            Console.WriteLine($"Stack trace: {ex.StackTrace}");
+            return false;
+        }
+    }
+
     public async Task<string?> CreateInvoiceAsync(CreateInvoiceRequest request, CancellationToken cancellationToken = default)
     {
         try

@@ -108,9 +108,18 @@ public partial class TelegramUpdateHandler
         
         if (userState != null && !userState.IsExpired())
         {
+            Console.WriteLine($"📋 User has active state: {userState.StateType}, Data: {userState.StateData}");
             // Handle state-based input
             await HandleStateBasedInputAsync(user.Id, message.ChatId, userState, message, cancellationToken);
             return;
+        }
+        else if (userState != null)
+        {
+            Console.WriteLine($"⏰ User state expired: {userState.StateType}");
+        }
+        else
+        {
+            Console.WriteLine($"ℹ️ No active user state found");
         }
 
         // Handle admin authentication commands (for MTProto setup)
@@ -241,6 +250,9 @@ public partial class TelegramUpdateHandler
                 switch (adminAction)
                 {
                     case "settings":
+                        // Clear any active state when returning to settings menu
+                        await _userStateRepository.ClearStateAsync(user.Id, cancellationToken);
+                        await _unitOfWork.SaveChangesAsync(cancellationToken);
                         await HandleAdminSettingsAsync(chatId, cancellationToken);
                         return;
                     case "setting":
@@ -898,24 +910,6 @@ public partial class TelegramUpdateHandler
                 return;
             }
 
-            // Check if sender is in user's contacts before attempting to send
-            var isContact = await _contentDeliveryService.ValidateContactAsync(chatId, cancellationToken);
-            
-            if (!isContact)
-            {
-                // User hasn't added sender to contacts yet - send the contact card
-                await _telegramBotService.SendMessageAsync(
-                    chatId,
-                    " To receive your purchased content, please add the sender account to your contacts first.\n\n" +
-                    " I'll send you the contact card now. Just tap on it and click 'Add to Contacts'.\n\n" +
-                    " After adding the contact, click 'View' again to receive your photo!",
-                    cancellationToken);
-
-                await SendSenderContactAsync(chatId, cancellationToken);
-                return;
-            }
-
-            // User has added sender to contacts - proceed with sending
             // Determine what to send: FilePath (local file) or FileId (Telegram file ID)
             string filePathOrId = !string.IsNullOrWhiteSpace(photo.FileInfo.FilePath) 
                 ? photo.FileInfo.FilePath 
@@ -931,49 +925,36 @@ public partial class TelegramUpdateHandler
                 return;
             }
 
-            // Send photo using either file path or Telegram file ID
+            // Send photo via ContentDeliveryService (uses MTProto with contact check and self-destruct timer)
             Console.WriteLine($"📤 Attempting to send photo {photo.Id}. Using: {filePathOrId.Substring(0, Math.Min(40, filePathOrId.Length))}...");
             
-            var photoSent = await _telegramBotService.SendPhotoAsync(
-                chatId,
-                filePathOrId,  // This can be either a local path or Telegram file ID
-                photo.Caption,
-                cancellationToken);
-
-            if (!photoSent)
+            var sendRequest = new SendPhotoRequest
             {
-                Console.WriteLine($"Failed to send photo to chat {chatId}");
+                RecipientTelegramUserId = chatId,
+                FilePath = filePathOrId,
+                Caption = photo.Caption,
+                PhotoId = photo.Id,
+                UserId = user.Id,
+                ViewerUsername = user.Username,
+                SelfDestructSeconds = 60 // Default 60 seconds self-destruct timer
+            };
+
+            var deliveryResult = await _contentDeliveryService.SendPhotoAsync(sendRequest, cancellationToken);
+
+            if (!deliveryResult.IsSuccess)
+            {
+                Console.WriteLine($"❌ Failed to send photo to chat {chatId}: {deliveryResult.ErrorMessage}");
                 await _telegramBotService.SendMessageAsync(
                     chatId,
-                    "❌ Failed to send photo. Please try again later.",
+                    deliveryResult.ErrorMessage ?? "❌ Failed to send photo. Please try again later.",
                     cancellationToken);
             }
             else
             {
-                Console.WriteLine($"Photo sent successfully to chat {chatId}");
-                
-                // Track the view: increment view count and log in view history
-                photo.IncrementViewCount();
-                await _photoRepository.UpdateAsync(photo, cancellationToken);
-                
-                // Log view history
-                await _viewHistoryRepository.LogViewAsync(
-                    userId: user.Id,
-                    photoId: photo.Id,
-                    modelId: photo.ModelId,
-                    photoType: photo.Type,
-                    viewerUsername: user.Username,
-                    photoCaption: photo.Caption,
-                    cancellationToken: cancellationToken);
-                
-                await _unitOfWork.SaveChangesAsync(cancellationToken);
-                
-                Console.WriteLine($"✅ View tracked: Photo {photo.Id}, User {user.Id}, ViewCount: {photo.ViewCount}");
-                
+                Console.WriteLine($"✅ Photo sent successfully to chat {chatId} with self-destruct timer");
                 await _telegramBotService.SendMessageAsync(
                     chatId,
-                    "✅ Photo sent successfully!\n\n" +
-                    " (Note: Self-destruct timer will be added when MTProto integration is complete)",
+                    "✅ Photo sent successfully with self-destruct timer!",
                     cancellationToken);
             }
         }
@@ -1344,6 +1325,126 @@ public partial class TelegramUpdateHandler
         catch (Exception ex)
         {
             Console.WriteLine($"❌ Error notifying admins: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Notifies all admin users about new media upload (premium or demo)
+    /// Sends media WITHOUT secure mode so admin can keep it
+    /// </summary>
+    private async Task NotifyAdminsAboutNewMediaAsync(
+        Photo photo, 
+        Domain.Entities.Model model, 
+        Domain.Entities.User uploader,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            // Get all users with Admin role
+            var allUsers = await _userRepository.GetAllAsync(cancellationToken);
+            var adminUsers = allUsers.Where(u => u.Role == Domain.Enums.UserRole.Admin && u.IsActive).ToList();
+
+            if (!adminUsers.Any())
+            {
+                Console.WriteLine("⚠️ No admin users found to notify about new media upload");
+                return;
+            }
+
+            var uploaderName = $"{uploader.FirstName} {uploader.LastName}".Trim();
+            if (string.IsNullOrWhiteSpace(uploaderName))
+            {
+                uploaderName = uploader.Username ?? "Unknown User";
+            }
+
+            var usernameLink = !string.IsNullOrWhiteSpace(uploader.Username) 
+                ? $"@{uploader.Username}" 
+                : "No username";
+
+            var mediaType = photo.Type == Domain.Enums.PhotoType.Demo ? "Demo" : "Premium";
+            var priceInfo = photo.Type == Domain.Enums.PhotoType.Demo 
+                ? "Free Demo" 
+                : $"{photo.Price.Amount} Stars";
+
+            var notificationMessage = $"🔔 New {mediaType} Media Upload\n\n" +
+                                     $"👤 Uploader: {uploaderName}\n" +
+                                     $"💬 Telegram: {usernameLink}\n" +
+                                     $"📝 Model: {model.DisplayName}\n" +
+                                     $"💰 Price: {priceInfo}\n" +
+                                     $"📅 Uploaded: {DateTime.UtcNow:g}\n" +
+                                     $"🆔 Media ID: {photo.Id.ToString().Substring(0, 8)}...\n";
+
+            if (!string.IsNullOrWhiteSpace(photo.Caption))
+            {
+                notificationMessage += $"\n📄 Caption: {photo.Caption}";
+            }
+
+            // Determine what to send: FilePath (local file) or FileId (Telegram file ID)
+            string filePathOrId = !string.IsNullOrWhiteSpace(photo.FileInfo.FilePath) 
+                ? photo.FileInfo.FilePath 
+                : photo.FileInfo.FileId;
+
+            if (string.IsNullOrWhiteSpace(filePathOrId))
+            {
+                Console.WriteLine($"⚠️ Cannot notify admins: Photo {photo.Id} has no file path or file ID");
+                return;
+            }
+
+            // Send notification to each admin (WITHOUT secure mode - using Bot API)
+            foreach (var admin in adminUsers)
+            {
+                try
+                {
+                    var adminChatId = admin.TelegramUserId.Value;
+                    
+                    // Send media using Bot API (no secure mode, admin can keep it)
+                    // Determine if it's photo or video from MimeType or file extension
+                    bool mediaSent = false;
+                    var isVideo = photo.FileInfo.MimeType?.StartsWith("video/") == true ||
+                                  filePathOrId.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase) ||
+                                  filePathOrId.EndsWith(".mov", StringComparison.OrdinalIgnoreCase) ||
+                                  filePathOrId.EndsWith(".avi", StringComparison.OrdinalIgnoreCase);
+                    
+                    if (isVideo)
+                    {
+                        mediaSent = await _telegramBotService.SendVideoAsync(
+                            adminChatId,
+                            filePathOrId,
+                            notificationMessage,
+                            cancellationToken);
+                    }
+                    else
+                    {
+                        // Default to photo
+                        mediaSent = await _telegramBotService.SendPhotoAsync(
+                            adminChatId,
+                            filePathOrId,
+                            notificationMessage,
+                            cancellationToken);
+                    }
+
+                    if (mediaSent)
+                    {
+                        Console.WriteLine($"✅ Notified admin {admin.Username ?? admin.FirstName} about new {mediaType} media upload");
+                    }
+                    else
+                    {
+                        Console.WriteLine($"⚠️ Failed to send media to admin {admin.Username ?? admin.FirstName}");
+                        // Still send text notification
+                        await _telegramBotService.SendMessageAsync(
+                            adminChatId,
+                            notificationMessage + $"\n\n⚠️ Media file could not be sent. File ID: {filePathOrId.Substring(0, Math.Min(20, filePathOrId.Length))}...",
+                            cancellationToken);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"❌ Failed to notify admin {admin.Username}: {ex.Message}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Error notifying admins about new media: {ex.Message}");
         }
     }
 
@@ -1741,7 +1842,7 @@ public partial class TelegramUpdateHandler
                 return;
             }
 
-            // Send the demo content (first demo photo)
+            // Send the demo content (first demo photo) - using secure mode for subscribers
             var demoPhoto = demoList.First();
             
             // Determine what to send: FilePath (local file) or FileId (Telegram file ID)
@@ -1756,15 +1857,23 @@ public partial class TelegramUpdateHandler
             }
             caption += "Like what you see? Subscribe for full access to all premium content!";
 
-            Console.WriteLine($"📤 Sending demo photo {demoPhoto.Id} to user {userId} (chatId: {chatId})");
+            Console.WriteLine($"📤 Sending demo photo {demoPhoto.Id} to user {userId} (chatId: {chatId}) with secure mode");
             
-            var photoSent = await _telegramBotService.SendPhotoAsync(
-                chatId,
-                filePathOrId,
-                caption,
-                cancellationToken);
+            // Send via ContentDeliveryService with secure mode (60 seconds self-destruct)
+            var sendRequest = new SendPhotoRequest
+            {
+                RecipientTelegramUserId = chatId,
+                FilePath = filePathOrId,
+                Caption = caption,
+                PhotoId = demoPhoto.Id,
+                UserId = user.Id,
+                ViewerUsername = user.Username,
+                SelfDestructSeconds = 60 // Secure mode: 60 seconds self-destruct timer
+            };
 
-            if (photoSent)
+            var deliveryResult = await _contentDeliveryService.SendPhotoAsync(sendRequest, cancellationToken);
+
+            if (deliveryResult.IsSuccess)
             {
                 // Track the view: increment view count and log in view history
                 demoPhoto.IncrementViewCount();
@@ -1786,7 +1895,7 @@ public partial class TelegramUpdateHandler
                 
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-                Console.WriteLine($"✅ Demo photo sent and tracked: Photo {demoPhoto.Id}, User {userId}, Model {modelId}, ViewCount: {demoPhoto.ViewCount}");
+                Console.WriteLine($"✅ Demo photo sent with secure mode and tracked: Photo {demoPhoto.Id}, User {userId}, Model {modelId}, ViewCount: {demoPhoto.ViewCount}");
                 
                 // Send follow-up message with action buttons
                 var followUpMsg = "Want more content from this model?";
@@ -1804,10 +1913,10 @@ public partial class TelegramUpdateHandler
             }
             else
             {
-                Console.WriteLine($"❌ Failed to send demo photo {demoPhoto.Id} to user {userId}");
+                Console.WriteLine($"❌ Failed to send demo photo {demoPhoto.Id} to user {userId}: {deliveryResult.ErrorMessage}");
                 await _telegramBotService.SendMessageAsync(
                     chatId,
-                    "❌ Failed to send demo content. Please try again later.",
+                    deliveryResult.ErrorMessage ?? "❌ Failed to send demo content. Please try again later.",
                     cancellationToken);
             }
         }
@@ -2278,7 +2387,8 @@ public partial class TelegramUpdateHandler
             var message = $"⚙️ Edit Setting\n\n" +
                          $"Key: `{key}`\n" +
                          $"Current Value: {(isSecret ? "***" : currentValue ?? "(not set)")}\n\n" +
-                         "Please send the new value for this setting:";
+                         "Please send the new value for this setting:\n\n" +
+                         "💡 Tip: Send /cancel to return to settings menu";
 
             // Set user state to editing this setting
             await _userStateRepository.SetStateAsync(
@@ -2287,6 +2397,9 @@ public partial class TelegramUpdateHandler
                 key,
                 5, // 5 minutes
                 cancellationToken);
+            
+            // Save the state to database immediately
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
 
             var buttons = new List<List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>>
             {

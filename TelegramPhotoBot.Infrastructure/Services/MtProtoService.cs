@@ -14,6 +14,8 @@ public class MtProtoService : IMtProtoService, IAsyncDisposable
     private readonly string _phoneNumber;
     private bool _isAuthenticated;
     private readonly SemaphoreSlim _initLock = new(1, 1);
+    private DateTime? _lastAuthAttempt;
+    private const int AuthRetryDelaySeconds = 60; // Wait 60 seconds before retrying after failure
 
     public MtProtoService(string apiId, string apiHash, string phoneNumber, string? sessionPath = null)
     {
@@ -88,16 +90,64 @@ public class MtProtoService : IMtProtoService, IAsyncDisposable
         {
             if (_isAuthenticated) return;
 
+            // Check if we should retry (wait at least AuthRetryDelaySeconds after last failed attempt)
+            if (_lastAuthAttempt.HasValue)
+            {
+                var timeSinceLastAttempt = DateTime.UtcNow - _lastAuthAttempt.Value;
+                if (timeSinceLastAttempt.TotalSeconds < AuthRetryDelaySeconds)
+                {
+                    var remainingSeconds = AuthRetryDelaySeconds - (int)timeSinceLastAttempt.TotalSeconds;
+                    Console.WriteLine($"⏳ Waiting {remainingSeconds} more seconds before retrying authentication (to avoid rate limiting)...");
+                    throw new InvalidOperationException($"Authentication retry cooldown: {remainingSeconds} seconds remaining. Previous attempt failed.");
+                }
+            }
+
+            // Create a timeout token (30 seconds for authentication)
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutCts.CancelAfter(TimeSpan.FromSeconds(30));
+
+            try
+            {
+                Console.WriteLine("🔐 Attempting MTProto authentication...");
+                _lastAuthAttempt = DateTime.UtcNow;
+
             // Login to Telegram
             var myself = await _client.LoginUserIfNeeded();
             
             if (myself == null)
             {
+                    _isAuthenticated = false;
+                    _lastAuthAttempt = DateTime.UtcNow;
                 throw new InvalidOperationException("Failed to authenticate with Telegram. Check your credentials.");
             }
 
             _isAuthenticated = true;
+                _lastAuthAttempt = null; // Reset on success
             Console.WriteLine($"✅ MTProto authenticated as: {myself.username ?? myself.first_name} (ID: {myself.id})");
+            }
+            catch (OperationCanceledException) when (timeoutCts.Token.IsCancellationRequested)
+            {
+                _isAuthenticated = false;
+                _lastAuthAttempt = DateTime.UtcNow;
+                Console.WriteLine($"⏱️ Authentication timed out. Will retry after {AuthRetryDelaySeconds} seconds.");
+                throw new TimeoutException("MTProto authentication timed out. Check your network connection and Telegram server availability.");
+            }
+            catch (System.Net.Sockets.SocketException ex)
+            {
+                _isAuthenticated = false;
+                _lastAuthAttempt = DateTime.UtcNow;
+                Console.WriteLine($"🌐 Network error during authentication: {ex.Message}");
+                Console.WriteLine($"💡 Will retry after {AuthRetryDelaySeconds} seconds.");
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _isAuthenticated = false;
+                _lastAuthAttempt = DateTime.UtcNow;
+                Console.WriteLine($"❌ Authentication failed: {ex.Message}");
+                Console.WriteLine($"💡 Will retry after {AuthRetryDelaySeconds} seconds.");
+                throw;
+            }
         }
         finally
         {
@@ -105,11 +155,25 @@ public class MtProtoService : IMtProtoService, IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Resets authentication state to force a retry on next attempt
+    /// </summary>
+    public void ResetAuthentication()
+    {
+        _isAuthenticated = false;
+        _lastAuthAttempt = null;
+        Console.WriteLine("🔄 Authentication state reset. Next attempt will try to authenticate.");
+    }
+
     public async Task<bool> IsContactAsync(long recipientTelegramUserId, CancellationToken cancellationToken = default)
     {
         try
         {
-            await EnsureAuthenticatedAsync(cancellationToken);
+            // Create a timeout token (15 seconds for contact check)
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutCts.CancelAfter(TimeSpan.FromSeconds(15));
+
+            await EnsureAuthenticatedAsync(timeoutCts.Token);
 
             // We need to check if WE are in THEIR contacts, not if they're in ours
             // Try to resolve the user and check their contact status
@@ -132,6 +196,8 @@ public class MtProtoService : IMtProtoService, IAsyncDisposable
             }
 
             // Alternative: Check if user is in our contacts (mutual contact scenario)
+            try
+            {
             var contacts = await _client.Contacts_GetContacts();
             
             if (contacts.users != null && contacts.users.TryGetValue(recipientTelegramUserId, out var contactUser))
@@ -143,14 +209,43 @@ public class MtProtoService : IMtProtoService, IAsyncDisposable
                     return u.flags.HasFlag(User.Flags.mutual_contact);
                 }
             }
+            }
+            catch (Exception ex)
+            {
+                // Error getting contacts - this is an error, not "contact not found"
+                Console.WriteLine($"❌ Error getting contacts list: {ex.Message}");
+                throw new Exception($"خطا در دریافت لیست کانتکت‌ها: {ex.Message}", ex);
+            }
 
-            Console.WriteLine($"❌ User {recipientTelegramUserId} has not added sender account to their contacts");
+            // If we reach here, contact check completed successfully but user is not in contacts
+            Console.WriteLine($"ℹ️ User {recipientTelegramUserId} has not added sender account to their contacts (check completed successfully)");
             return false;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            var errorMsg = $"⏱️ بررسی کانتکت timeout شد. ممکن است به دلیل مشکلات شبکه یا عدم دسترسی به سرورهای Telegram باشد.";
+            Console.WriteLine($"⏱️ Contact check timed out for user {recipientTelegramUserId}. This may be due to network issues or Telegram server unavailability.");
+            Console.WriteLine($"💡 Tip: Check your internet connection and ensure Telegram servers are accessible.");
+            throw new TimeoutException(errorMsg);
+        }
+        catch (TimeoutException ex)
+        {
+            Console.WriteLine($"⏱️ Contact check timed out: {ex.Message}");
+            throw new TimeoutException($"⏱️ بررسی کانتکت timeout شد: {ex.Message}");
+        }
+        catch (System.Net.Sockets.SocketException ex)
+        {
+            var errorMsg = $"🌐 خطای شبکه در بررسی وضعیت کانتکت: {ex.Message}";
+            Console.WriteLine($"🌐 Network error checking contact status: {ex.Message}");
+            Console.WriteLine($"💡 Tip: Check your internet connection and firewall settings.");
+            throw new Exception(errorMsg, ex);
         }
         catch (Exception ex)
         {
+            var errorMsg = $"❌ خطا در بررسی وضعیت کانتکت: {ex.Message}";
             Console.WriteLine($"❌ Error checking contact status: {ex.Message}");
-            return false;
+            Console.WriteLine($"💡 Error type: {ex.GetType().Name}");
+            throw new Exception(errorMsg, ex);
         }
     }
 
@@ -165,11 +260,22 @@ public class MtProtoService : IMtProtoService, IAsyncDisposable
         {
             await EnsureAuthenticatedAsync(cancellationToken);
 
-            // Validate contact first
-            var isContact = await IsContactAsync(recipientTelegramUserId, cancellationToken);
+            // Validate contact first - catch exceptions to distinguish errors from missing contact
+            bool isContact;
+            try
+            {
+                isContact = await IsContactAsync(recipientTelegramUserId, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                // If there's an error checking contact, return error message instead of "contact required"
+                Console.WriteLine($"❌ Error checking contact status: {ex.Message}");
+                return ContentDeliveryResult.Failure($"❌ خطا در بررسی وضعیت کانتکت: {ex.Message}");
+            }
+
             if (!isContact)
             {
-                return ContentDeliveryResult.Failure("❌ Recipient must have sender account in their contacts first");
+                return ContentDeliveryResult.Failure("❌ لطفاً ابتدا حساب فرستنده را به کانتکت‌های خود اضافه کنید");
             }
 
             // Get the recipient peer
@@ -244,11 +350,22 @@ public class MtProtoService : IMtProtoService, IAsyncDisposable
         {
             await EnsureAuthenticatedAsync(cancellationToken);
 
-            // Validate contact first
-            var isContact = await IsContactAsync(recipientTelegramUserId, cancellationToken);
+            // Validate contact first - catch exceptions to distinguish errors from missing contact
+            bool isContact;
+            try
+            {
+                isContact = await IsContactAsync(recipientTelegramUserId, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                // If there's an error checking contact, return error message instead of "contact required"
+                Console.WriteLine($"❌ Error checking contact status: {ex.Message}");
+                return ContentDeliveryResult.Failure($"❌ خطا در بررسی وضعیت کانتکت: {ex.Message}");
+            }
+
             if (!isContact)
             {
-                return ContentDeliveryResult.Failure("❌ Recipient must have sender account in their contacts first");
+                return ContentDeliveryResult.Failure("❌ لطفاً ابتدا حساب فرستنده را به کانتکت‌های خود اضافه کنید");
             }
 
             // Get the recipient peer
@@ -318,6 +435,52 @@ public class MtProtoService : IMtProtoService, IAsyncDisposable
             Console.WriteLine($"❌ Error sending video: {ex.Message}");
             Console.WriteLine($"Stack trace: {ex.StackTrace}");
             return ContentDeliveryResult.Failure($"Failed to send video: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Checks if Telegram servers are reachable
+    /// </summary>
+    public async Task<bool> CheckConnectivityAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutCts.CancelAfter(TimeSpan.FromSeconds(10));
+
+            Console.WriteLine("🔍 Checking connectivity to Telegram servers...");
+            
+            // Try to connect (this will fail fast if unreachable)
+            var myself = await _client.LoginUserIfNeeded();
+            
+            if (myself != null)
+            {
+                Console.WriteLine("✅ Telegram servers are reachable");
+                return true;
+            }
+            
+            return false;
+        }
+        catch (System.Net.Sockets.SocketException ex)
+        {
+            Console.WriteLine($"❌ Cannot reach Telegram servers: {ex.Message}");
+            Console.WriteLine($"💡 Possible causes:");
+            Console.WriteLine($"   - Firewall blocking port 443");
+            Console.WriteLine($"   - Network connectivity issues");
+            Console.WriteLine($"   - ISP blocking Telegram servers");
+            Console.WriteLine($"   - VPN required in your region");
+            Console.WriteLine($"   - Telegram servers temporarily unavailable");
+            return false;
+        }
+        catch (TimeoutException ex)
+        {
+            Console.WriteLine($"⏱️ Connection to Telegram servers timed out: {ex.Message}");
+            return false;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"⚠️ Connectivity check failed: {ex.Message}");
+            return false;
         }
     }
 

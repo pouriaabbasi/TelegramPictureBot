@@ -10,6 +10,7 @@ public static class MtProtoAuthStore
     private static readonly ConcurrentDictionary<string, string> _credentials = new();
     private static Func<long, Task>? _onVerificationCodeNeeded;
     private static Func<long, Task>? _on2FAPasswordNeeded;
+    private static Func<long, Task>? _onAuthenticationSuccess;
     private static long? _currentChatId;
     
     /// <summary>
@@ -34,6 +35,14 @@ public static class MtProtoAuthStore
     public static void Set2FAPasswordCallback(Func<long, Task> callback)
     {
         _on2FAPasswordNeeded = callback;
+    }
+    
+    /// <summary>
+    /// Sets the callback to be called when authentication succeeds
+    /// </summary>
+    public static void SetAuthenticationSuccessCallback(Func<long, Task> callback)
+    {
+        _onAuthenticationSuccess = callback;
     }
     
     /// <summary>
@@ -75,6 +84,28 @@ public static class MtProtoAuthStore
                 catch (Exception ex)
                 {
                     Console.WriteLine($"❌ Error in 2FA password notification callback: {ex.Message}");
+                }
+            });
+        }
+    }
+    
+    /// <summary>
+    /// Notifies that authentication was successful
+    /// </summary>
+    public static void NotifyAuthenticationSuccess()
+    {
+        if (_currentChatId.HasValue && _onAuthenticationSuccess != null)
+        {
+            // Fire and forget - don't block the authentication thread
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await _onAuthenticationSuccess(_currentChatId.Value);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"❌ Error in authentication success notification callback: {ex.Message}");
                 }
             });
         }
@@ -133,6 +164,7 @@ public static class MtProtoAuthStore
         _currentChatId = null;
         _onVerificationCodeNeeded = null;
         _on2FAPasswordNeeded = null;
+        _onAuthenticationSuccess = null;
         Console.WriteLine("🧹 Cleared all stored credentials");
     }
 }

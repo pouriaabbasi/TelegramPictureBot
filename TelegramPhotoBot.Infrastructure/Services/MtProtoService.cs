@@ -275,6 +275,9 @@ public class MtProtoService : IMtProtoService, IAsyncDisposable
             _isAuthenticated = true;
                 _lastAuthAttempt = null; // Reset on success
             Console.WriteLine($"✅ MTProto authenticated as: {myself.username ?? myself.first_name} (ID: {myself.id})");
+            
+            // Notify that authentication was successful
+            MtProtoAuthStore.NotifyAuthenticationSuccess();
             }
             catch (OperationCanceledException) when (timeoutCts.Token.IsCancellationRequested)
             {

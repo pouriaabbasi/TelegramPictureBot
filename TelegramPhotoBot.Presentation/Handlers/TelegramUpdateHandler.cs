@@ -187,59 +187,19 @@ public partial class TelegramUpdateHandler
                 
                 // Try to trigger authentication - if it's waiting, it will use the code
                 // If it timed out, we'll reset and retry
-                _ = Task.Run(async () =>
-                {
-                    try
-                    {
-                        // Small delay to ensure code is stored
-                        await Task.Delay(500, cancellationToken);
-                        
-                        // Reset authentication state to allow retry (in case previous attempt timed out)
-                        if (_mtProtoService is Infrastructure.Services.LazyMtProtoService lazyService)
-                        {
-                            var underlyingService = lazyService.GetUnderlyingService();
-                            if (underlyingService != null)
-                            {
-                                underlyingService.ResetAuthentication();
-                            }
-                        }
-                        else if (_mtProtoService is Infrastructure.Services.MtProtoService mtProtoServiceDirect)
-                        {
-                            mtProtoServiceDirect.ResetAuthentication();
-                        }
-                        
-                        // Try authentication - it will use the stored code
-                        var authResult = await _mtProtoService.TestAuthenticationAsync(cancellationToken);
-                        if (authResult)
-                        {
-                            await _telegramBotService.SendMessageAsync(
-                                message.ChatId,
-                                "✅ MTProto authentication successful!\n\n" +
-                                "The service is now ready to use.",
-                                cancellationToken);
-                        }
-                        else
-                        {
-                            await _telegramBotService.SendMessageAsync(
-                                message.ChatId,
-                                "⚠️ Authentication attempt completed but result is unclear.\n\n" +
-                                "Please check if you received a 2FA password request.\n\n" +
-                                "If you need to provide a 2FA password, use:\n" +
-                                "`/auth_password <your_password>`",
-                                cancellationToken);
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"⚠️ Error during authentication: {ex.Message}");
-                        await _telegramBotService.SendMessageAsync(
-                            message.ChatId,
-                            $"⚠️ Authentication error: {ex.Message}\n\n" +
-                            "The code has been stored. If authentication is still waiting, it will use this code.\n\n" +
-                            "If you receive a new verification code, please send it using `/auth_code <code>`",
-                            cancellationToken);
-                    }
-                }, cancellationToken);
+                // Note: We don't call TestAuthenticationAsync here because the background authentication
+                // process started by ReinitializeAsync is already waiting for this code.
+                // Calling TestAuthenticationAsync would trigger a SECOND login attempt with the same code,
+                // causing Telegram to block the login for security reasons.
+                // The background process will automatically use this code from MtProtoAuthStore.
+                
+                await _telegramBotService.SendMessageAsync(
+                    message.ChatId,
+                    "✅ Verification code received and stored!\n\n" +
+                    "⏳ The authentication process will now continue automatically.\n\n" +
+                    "Please wait a few seconds...\n\n" +
+                    "💡 If 2FA is enabled, you'll receive a prompt for your password.",
+                    cancellationToken);
                 
                 return;
             }
@@ -259,69 +219,19 @@ public partial class TelegramUpdateHandler
                     return;
                 }
                 
-                // Set the 2FA password FIRST
+                // Set the 2FA password
                 Infrastructure.Services.MtProtoAuthStore.Set2FAPassword(password);
                 
-                // Send immediate confirmation
+                // Note: We don't call TestAuthenticationAsync here because the background authentication
+                // process is already waiting for this password. Calling TestAuthenticationAsync would
+                // trigger a SECOND login attempt, which could cause issues.
+                
                 await _telegramBotService.SendMessageAsync(
                     message.ChatId,
-                    "✅ 2FA password received.\n\n" +
-                    "🔄 Attempting to use this password for authentication...\n\n" +
-                    "⏳ Please wait while authentication completes...",
+                    "✅ 2FA password received and stored!\n\n" +
+                    "⏳ The authentication process will now continue automatically.\n\n" +
+                    "Please wait a few seconds...",
                     cancellationToken);
-                
-                // Try to trigger authentication - if it's waiting, it will use the password
-                // If it timed out, we'll reset and retry
-                _ = Task.Run(async () =>
-                {
-                    try
-                    {
-                        // Small delay to ensure password is stored
-                        await Task.Delay(500, cancellationToken);
-                        
-                        // Reset authentication state to allow retry (in case previous attempt timed out)
-                        if (_mtProtoService is Infrastructure.Services.LazyMtProtoService lazyService)
-                        {
-                            var underlyingService = lazyService.GetUnderlyingService();
-                            if (underlyingService != null)
-                            {
-                                underlyingService.ResetAuthentication();
-                            }
-                        }
-                        else if (_mtProtoService is Infrastructure.Services.MtProtoService mtProtoServiceDirect)
-                        {
-                            mtProtoServiceDirect.ResetAuthentication();
-                        }
-                        
-                        // Try authentication - it will use the stored password
-                        var authResult = await _mtProtoService.TestAuthenticationAsync(cancellationToken);
-                        if (authResult)
-                        {
-                            await _telegramBotService.SendMessageAsync(
-                                message.ChatId,
-                                "✅ MTProto authentication successful!\n\n" +
-                                "The service is now ready to use.",
-                                cancellationToken);
-                        }
-                        else
-                        {
-                            await _telegramBotService.SendMessageAsync(
-                                message.ChatId,
-                                "⚠️ Authentication attempt completed but result is unclear.\n\n" +
-                                "Please check the logs for more details.",
-                                cancellationToken);
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"⚠️ Error during authentication: {ex.Message}");
-                        await _telegramBotService.SendMessageAsync(
-                            message.ChatId,
-                            $"⚠️ Authentication error: {ex.Message}\n\n" +
-                            "The password has been stored. If authentication is still waiting, it will use this password.",
-                            cancellationToken);
-                    }
-                }, cancellationToken);
                 
                 return;
             }

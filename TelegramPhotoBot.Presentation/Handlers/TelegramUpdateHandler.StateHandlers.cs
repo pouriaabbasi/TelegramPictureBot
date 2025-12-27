@@ -958,7 +958,16 @@ public partial class TelegramUpdateHandler
                                      "Example: `/auth_password mypassword123`";
                 await _telegramBotService.SendMessageAsync(targetChatId, passwordMessage, cancellationToken);
             });
-            Console.WriteLine($"✅ Callbacks set up");
+            
+            Infrastructure.Services.MtProtoAuthStore.SetAuthenticationSuccessCallback(async (targetChatId) =>
+            {
+                var successMessage = "✅ **MTProto Authentication Successful!**\n\n" +
+                                   "🎉 Your account has been authenticated successfully.\n\n" +
+                                   "The MTProto service is now ready to use for secure content delivery!";
+                await _telegramBotService.SendMessageAsync(targetChatId, successMessage, cancellationToken);
+            });
+            
+            Console.WriteLine($"✅ Callbacks set up (including success callback)");
 
             // Start authentication in background
             Console.WriteLine($"📤 Sending success message to user...");

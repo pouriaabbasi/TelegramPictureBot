@@ -177,5 +177,19 @@ public class LazyMtProtoService : IMtProtoService
             return Task.FromResult(false);
         }
     }
+
+    public Task<string?> LoginAsync(string loginInfo, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var service = GetOrCreateService();
+            return service.LoginAsync(loginInfo, cancellationToken);
+        }
+        catch (InvalidOperationException)
+        {
+            Console.WriteLine("⚠️ MTProto service not configured. Please use /mtproto_setup to configure.");
+            return Task.FromResult<string?>("not_configured");
+        }
+    }
 }
 

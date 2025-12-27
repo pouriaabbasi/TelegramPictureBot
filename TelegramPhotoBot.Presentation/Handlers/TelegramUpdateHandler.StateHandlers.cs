@@ -983,32 +983,34 @@ public partial class TelegramUpdateHandler
             Console.WriteLine($"✅ Success message sent");
 
             // Start authentication in background (fire and forget)
-            // Add a small delay to ensure everything is properly initialized
+            // Use Client.Login() method which is non-blocking
             _ = Task.Run(async () =>
             {
                 try
                 {
-                    // Wait 2 seconds to ensure MTProto client is fully initialized
-                    await Task.Delay(2000, cancellationToken);
+                    // Wait a moment to ensure everything is initialized
+                    await Task.Delay(1000, cancellationToken);
                     
-                    Console.WriteLine("🔄 Starting MTProto authentication in background...");
-                    var authResult = await _mtProtoService.TestAuthenticationAsync(cancellationToken);
+                    Console.WriteLine("🔄 Starting MTProto authentication with phone number...");
                     
-                    if (authResult)
+                    // Use LoginAsync with phone number to start the authentication flow
+                    var result = await _mtProtoService.LoginAsync(phone, cancellationToken);
+                    
+                    if (result == null)
                     {
+                        // Logged in successfully (shouldn't happen on first call with just phone number)
                         var successMsg = "✅ MTProto authentication successful!\n\n" +
                                        "The service is now ready to use.";
                         await _telegramBotService.SendMessageAsync(chatId, successMsg, cancellationToken);
                     }
+                    else if (result == "verification_code")
+                    {
+                        // Verification code needed - admin was already notified by the callback
+                        Console.WriteLine("ℹ️ Verification code requested, waiting for admin input via /auth_code");
+                    }
                     else
                     {
-                        var waitingMsg = "⏳ Authentication is still in progress...\n\n" +
-                                       "If you haven't received a code request yet, please wait.\n\n" +
-                                       "If you need to provide a verification code, use:\n" +
-                                       "`/auth_code <your_code>`\n\n" +
-                                       "If 2FA is required, use:\n" +
-                                       "`/auth_password <your_password>`";
-                        await _telegramBotService.SendMessageAsync(chatId, waitingMsg, cancellationToken);
+                        Console.WriteLine($"ℹ️ Login step requires: {result}");
                     }
                 }
                 catch (Exception ex)

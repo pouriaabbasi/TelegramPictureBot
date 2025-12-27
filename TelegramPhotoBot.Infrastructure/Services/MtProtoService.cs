@@ -177,8 +177,7 @@ public class MtProtoService : IMtProtoService, IAsyncDisposable
             "api_hash" => _apiHash,
             "phone_number" => _phoneNumber,
             "session_pathname" => _sessionPath ?? Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "mtproto_session.dat"),
-            "verification_code" => WaitForVerificationCode(),
-            "password" => WaitFor2FAPassword(),
+            // Don't block here - return null to let WTelegram handle it
             _ => null
         };
     }
@@ -230,6 +229,51 @@ public class MtProtoService : IMtProtoService, IAsyncDisposable
         
         Console.WriteLine("❌ Timeout waiting for 2FA password");
         return null;
+    }
+
+    /// <summary>
+    /// Performs login with the provided value (verification code or password)
+    /// This is the proper way to handle authentication without blocking the Config callback
+    /// </summary>
+    public async Task<string?> LoginAsync(string loginInfo, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            Console.WriteLine($"🔐 Performing login with provided info...");
+            var result = await _client.Login(loginInfo);
+            
+            if (result == null)
+            {
+                // Login successful
+                _isAuthenticated = true;
+                _lastAuthAttempt = null;
+                Console.WriteLine($"✅ MTProto authenticated successfully!");
+                MtProtoAuthStore.NotifyAuthenticationSuccess();
+                return null;
+            }
+            else
+            {
+                // More info needed (verification_code, password, etc.)
+                Console.WriteLine($"ℹ️ Login needs: {result}");
+                
+                if (result == "verification_code")
+                {
+                    MtProtoAuthStore.NotifyVerificationCodeNeeded();
+                }
+                else if (result == "password")
+                {
+                    MtProtoAuthStore.Notify2FAPasswordNeeded();
+                }
+                
+                return result;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Login error: {ex.Message}");
+            _isAuthenticated = false;
+            throw;
+        }
     }
 
     private async Task EnsureAuthenticatedAsync(CancellationToken cancellationToken = default)

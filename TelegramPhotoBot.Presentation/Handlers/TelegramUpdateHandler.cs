@@ -174,32 +174,53 @@ public partial class TelegramUpdateHandler
                     return;
                 }
                 
-                // Set the verification code FIRST
-                Infrastructure.Services.MtProtoAuthStore.SetVerificationCode(code);
-                
-                // Send immediate confirmation
-                await _telegramBotService.SendMessageAsync(
-                    message.ChatId,
-                    $"✅ Verification code received: `{code}`\n\n" +
-                    "🔄 Attempting to use this code for authentication...\n\n" +
-                    "⏳ Please wait while authentication completes...",
-                    cancellationToken);
-                
-                // Try to trigger authentication - if it's waiting, it will use the code
-                // If it timed out, we'll reset and retry
-                // Note: We don't call TestAuthenticationAsync here because the background authentication
-                // process started by ReinitializeAsync is already waiting for this code.
-                // Calling TestAuthenticationAsync would trigger a SECOND login attempt with the same code,
-                // causing Telegram to block the login for security reasons.
-                // The background process will automatically use this code from MtProtoAuthStore.
-                
-                await _telegramBotService.SendMessageAsync(
-                    message.ChatId,
-                    "✅ Verification code received and stored!\n\n" +
-                    "⏳ The authentication process will now continue automatically.\n\n" +
-                    "Please wait a few seconds...\n\n" +
-                    "💡 If 2FA is enabled, you'll receive a prompt for your password.",
-                    cancellationToken);
+                // Use the new LoginAsync method to provide the code directly
+                try
+                {
+                    Console.WriteLine($"📝 Admin entered verification code: {code}");
+                    var result = await _mtProtoService.LoginAsync(code, cancellationToken);
+                    
+                    if (result == null)
+                    {
+                        // Login successful!
+                        await _telegramBotService.SendMessageAsync(
+                            message.ChatId,
+                            "✅ MTProto authentication successful!\n\n" +
+                            "🎉 Your account has been authenticated.\n\n" +
+                            "The MTProto service is now ready to use for secure content delivery!",
+                            cancellationToken);
+                    }
+                    else if (result == "password")
+                    {
+                        // 2FA password needed
+                        await _telegramBotService.SendMessageAsync(
+                            message.ChatId,
+                            "🔐 **2FA Password Required**\n\n" +
+                            "Your account has 2FA enabled.\n\n" +
+                            "Please send your 2FA password using:\n" +
+                            "`/auth_password <your_password>`\n\n" +
+                            "Example: `/auth_password mypassword123`",
+                            cancellationToken);
+                    }
+                    else
+                    {
+                        // Other state - shouldn't happen
+                        await _telegramBotService.SendMessageAsync(
+                            message.ChatId,
+                            $"⚠️ Authentication requires: {result}\n\n" +
+                            "Please follow the instructions.",
+                            cancellationToken);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"❌ Error during authentication with code: {ex.Message}");
+                    await _telegramBotService.SendMessageAsync(
+                        message.ChatId,
+                        $"❌ Authentication error: {ex.Message}\n\n" +
+                        "Please try `/mtproto_setup` again to reconfigure.",
+                        cancellationToken);
+                }
                 
                 return;
             }
@@ -219,19 +240,41 @@ public partial class TelegramUpdateHandler
                     return;
                 }
                 
-                // Set the 2FA password
-                Infrastructure.Services.MtProtoAuthStore.Set2FAPassword(password);
-                
-                // Note: We don't call TestAuthenticationAsync here because the background authentication
-                // process is already waiting for this password. Calling TestAuthenticationAsync would
-                // trigger a SECOND login attempt, which could cause issues.
-                
-                await _telegramBotService.SendMessageAsync(
-                    message.ChatId,
-                    "✅ 2FA password received and stored!\n\n" +
-                    "⏳ The authentication process will now continue automatically.\n\n" +
-                    "Please wait a few seconds...",
-                    cancellationToken);
+                // Use the new LoginAsync method to provide the password directly
+                try
+                {
+                    Console.WriteLine($"📝 Admin entered 2FA password");
+                    var result = await _mtProtoService.LoginAsync(password, cancellationToken);
+                    
+                    if (result == null)
+                    {
+                        // Login successful!
+                        await _telegramBotService.SendMessageAsync(
+                            message.ChatId,
+                            "✅ MTProto authentication successful!\n\n" +
+                            "🎉 Your account has been authenticated.\n\n" +
+                            "The MTProto service is now ready to use for secure content delivery!",
+                            cancellationToken);
+                    }
+                    else
+                    {
+                        // Other state - shouldn't happen after password
+                        await _telegramBotService.SendMessageAsync(
+                            message.ChatId,
+                            $"⚠️ Authentication requires: {result}\n\n" +
+                            "Please follow the instructions.",
+                            cancellationToken);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"❌ Error during authentication with password: {ex.Message}");
+                    await _telegramBotService.SendMessageAsync(
+                        message.ChatId,
+                        $"❌ Authentication error: {ex.Message}\n\n" +
+                        "Please try `/mtproto_setup` again to reconfigure.",
+                        cancellationToken);
+                }
                 
                 return;
             }

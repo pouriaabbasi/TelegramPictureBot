@@ -41,5 +41,11 @@ public interface IMtProtoService
     /// Attempts to authenticate with the current credentials
     /// </summary>
     Task<bool> TestAuthenticationAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Performs login with the provided value (verification code, password, or phone number)
+    /// Returns null if login successful, or the next required value (like "verification_code", "password")
+    /// </summary>
+    Task<string?> LoginAsync(string loginInfo, CancellationToken cancellationToken = default);
 }
 

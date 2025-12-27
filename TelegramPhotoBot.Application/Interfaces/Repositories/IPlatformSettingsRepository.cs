@@ -28,5 +28,10 @@ public interface IPlatformSettingsRepository : IRepository<PlatformSettings>
     /// Checks if a setting exists
     /// </summary>
     Task<bool> ExistsAsync(string key, CancellationToken cancellationToken = default);
+    
+    /// <summary>
+    /// Hard deletes all MTProto-related settings (including soft-deleted ones) to ensure clean setup
+    /// </summary>
+    Task ClearMtProtoSettingsAsync(CancellationToken cancellationToken = default);
 }
 

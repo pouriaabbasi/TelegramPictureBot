@@ -48,6 +48,21 @@ public enum UserStateType
     /// <summary>
     /// Admin editing a platform setting value
     /// </summary>
-    EditingPlatformSetting = 8
+    EditingPlatformSetting = 8,
+    
+    /// <summary>
+    /// Admin setting up MTProto - step 1: API ID
+    /// </summary>
+    MtProtoSetupApiId = 9,
+    
+    /// <summary>
+    /// Admin setting up MTProto - step 2: API Hash
+    /// </summary>
+    MtProtoSetupApiHash = 10,
+    
+    /// <summary>
+    /// Admin setting up MTProto - step 3: Phone Number
+    /// </summary>
+    MtProtoSetupPhoneNumber = 11
 }
 

@@ -70,31 +70,36 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<Telegram.Bot.ITelegramBotClient>(sp => new Telegram.Bot.TelegramBotClient(botToken));
         services.AddScoped<ITelegramBotService>(sp => new TelegramBotService(botToken));
 
-        // MTProto Service - Singleton to maintain persistent connection
-        // Credentials loaded from database at initialization (after bot is running)
-        services.AddSingleton<IMtProtoService>(sp =>
+        // MTProto Service - Lazy initialization to avoid errors on startup
+        // Service will only be created when actually needed (first use)
+        // This prevents errors when credentials are not yet configured
+        services.AddSingleton<IMtProtoService>(sp => new LazyMtProtoService(() =>
         {
             using var scope = sp.CreateScope();
             var settingsRepo = scope.ServiceProvider.GetRequiredService<IPlatformSettingsRepository>();
+            var config = scope.ServiceProvider.GetRequiredService<IConfiguration>();
             
             var apiId = settingsRepo.GetValueAsync(TelegramPhotoBot.Domain.Entities.PlatformSettings.Keys.MtProtoApiId).Result
-                       ?? configuration["Telegram:MtProto:ApiId"]
-                       ?? throw new InvalidOperationException("MTProto ApiId not found");
+                       ?? config["Telegram:MtProto:ApiId"];
             
             var apiHash = settingsRepo.GetValueAsync(TelegramPhotoBot.Domain.Entities.PlatformSettings.Keys.MtProtoApiHash).Result
-                         ?? configuration["Telegram:MtProto:ApiHash"]
-                         ?? throw new InvalidOperationException("MTProto ApiHash not found");
+                         ?? config["Telegram:MtProto:ApiHash"];
             
             var phoneNumber = settingsRepo.GetValueAsync(TelegramPhotoBot.Domain.Entities.PlatformSettings.Keys.MtProtoPhoneNumber).Result
-                             ?? configuration["Telegram:MtProto:PhoneNumber"]
-                             ?? throw new InvalidOperationException("MTProto PhoneNumber not found");
+                             ?? config["Telegram:MtProto:PhoneNumber"];
+            
+            // If credentials are not found, throw exception - service will handle it gracefully
+            if (string.IsNullOrWhiteSpace(apiId) || string.IsNullOrWhiteSpace(apiHash) || string.IsNullOrWhiteSpace(phoneNumber))
+            {
+                throw new InvalidOperationException("MTProto credentials not configured. Please use /mtproto_setup to configure.");
+            }
             
             var sessionPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Data", "mtproto_session.dat");
             Directory.CreateDirectory(Path.GetDirectoryName(sessionPath)!);
             
             Console.WriteLine($"📱 Initializing MTProto with phone: {phoneNumber}");
             return new MtProtoService(apiId, apiHash, phoneNumber, sessionPath);
-        });
+        }));
 
         return services;
     }

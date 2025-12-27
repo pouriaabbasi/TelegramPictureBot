@@ -56,6 +56,8 @@ public class TelegramBotPollingService : BackgroundService
     {
         try
         {
+            _logger.LogDebug("Received update type: {UpdateType}, UpdateId: {UpdateId}", update.Type, update.Id);
+            
             using var scope = _serviceProvider.CreateScope();
             var updateHandler = scope.ServiceProvider.GetRequiredService<TelegramUpdateHandler>();
             var paymentHandler = scope.ServiceProvider.GetRequiredService<PaymentCallbackHandler>();
@@ -65,6 +67,10 @@ public class TelegramBotPollingService : BackgroundService
                 case UpdateType.Message:
                     if (update.Message != null)
                     {
+                        _logger.LogDebug("Processing message from user {UserId}, text: {Text}", 
+                            update.Message.From?.Id, 
+                            update.Message.Text ?? "(no text)");
+                        
                         // Check if it's a successful payment first
                         if (update.Message.SuccessfulPayment != null)
                         {
@@ -101,14 +107,26 @@ public class TelegramBotPollingService : BackgroundService
                                 Video = update.Message.Video
                             };
 
+                            _logger.LogDebug("Calling HandleMessageAsync for message: {Text}", telegramMessage.Text ?? "(no text)");
                             await updateHandler.HandleMessageAsync(telegramMessage, cancellationToken);
+                            _logger.LogDebug("HandleMessageAsync completed successfully");
                         }
+                        else
+                        {
+                            _logger.LogWarning("Message received but From is null");
+                        }
+                    }
+                    else
+                    {
+                        _logger.LogWarning("Update type is Message but Message is null");
                     }
                     break;
 
                 case UpdateType.CallbackQuery:
                     if (update.CallbackQuery != null && update.CallbackQuery.Data != null)
                     {
+                        _logger.LogDebug("Processing callback query: {Data}", update.CallbackQuery.Data);
+                        
                         // Answer the callback query to remove the loading state
                         await _botClient.AnswerCallbackQueryAsync(update.CallbackQuery.Id, cancellationToken: cancellationToken);
                         
@@ -133,7 +151,11 @@ public class TelegramBotPollingService : BackgroundService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error handling update");
+            _logger.LogError(ex, "Error handling update. UpdateType: {UpdateType}, UpdateId: {UpdateId}, Exception: {ExceptionMessage}, StackTrace: {StackTrace}", 
+                update.Type, 
+                update.Id, 
+                ex.Message, 
+                ex.StackTrace);
         }
     }
 

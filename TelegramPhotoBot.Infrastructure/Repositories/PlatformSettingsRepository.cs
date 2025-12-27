@@ -58,5 +58,32 @@ public class PlatformSettingsRepository : Repository<PlatformSettings>, IPlatfor
         return await _context.Set<PlatformSettings>()
             .AnyAsync(s => s.Key == key && !s.IsDeleted, cancellationToken);
     }
+
+    public async Task ClearMtProtoSettingsAsync(CancellationToken cancellationToken = default)
+    {
+        // Get all MTProto-related settings (including soft-deleted ones)
+        // We need to ignore the query filter to get deleted records too
+        var mtProtoKeys = new[]
+        {
+            Domain.Entities.PlatformSettings.Keys.MtProtoApiId,
+            Domain.Entities.PlatformSettings.Keys.MtProtoApiHash,
+            Domain.Entities.PlatformSettings.Keys.MtProtoPhoneNumber,
+            Domain.Entities.PlatformSettings.Keys.MtProtoSessionData
+        };
+
+        // Temporarily disable query filter to get all records (including deleted)
+        var allSettings = await _context.Set<PlatformSettings>()
+            .IgnoreQueryFilters()
+            .Where(s => mtProtoKeys.Contains(s.Key))
+            .ToListAsync(cancellationToken);
+
+        // Hard delete all found records
+        foreach (var setting in allSettings)
+        {
+            _context.Set<PlatformSettings>().Remove(setting);
+        }
+
+        Console.WriteLine($"🗑️ Cleared {allSettings.Count} MTProto setting record(s) (including soft-deleted ones)");
+    }
 }
 

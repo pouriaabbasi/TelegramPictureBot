@@ -31,5 +31,15 @@ public interface IMtProtoService
         string? caption,
         int selfDestructSeconds,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Reinitializes the MTProto service with new credentials
+    /// </summary>
+    Task ReinitializeAsync(string apiId, string apiHash, string phoneNumber, string? sessionPath = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Attempts to authenticate with the current credentials
+    /// </summary>
+    Task<bool> TestAuthenticationAsync(CancellationToken cancellationToken = default);
 }
 

@@ -10,39 +10,187 @@ namespace TelegramPhotoBot.Infrastructure.Services;
 /// </summary>
 public class MtProtoService : IMtProtoService, IAsyncDisposable
 {
-    private readonly Client _client;
-    private readonly string _phoneNumber;
+    private static readonly object _sessionFileLock = new object();
+    private static readonly HashSet<string> _activeSessionFiles = new HashSet<string>();
+    
+    private Client _client;
+    private string _apiId;
+    private string _apiHash;
+    private string _phoneNumber;
+    private string? _sessionPath;
     private bool _isAuthenticated;
     private readonly SemaphoreSlim _initLock = new(1, 1);
+    private readonly SemaphoreSlim _reinitLock = new(1, 1);
     private DateTime? _lastAuthAttempt;
     private const int AuthRetryDelaySeconds = 60; // Wait 60 seconds before retrying after failure
 
     public MtProtoService(string apiId, string apiHash, string phoneNumber, string? sessionPath = null)
     {
+        _apiId = apiId ?? throw new ArgumentNullException(nameof(apiId));
+        _apiHash = apiHash ?? throw new ArgumentNullException(nameof(apiHash));
         _phoneNumber = phoneNumber ?? throw new ArgumentNullException(nameof(phoneNumber));
+        _sessionPath = sessionPath ?? Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Data", "mtproto_session.dat");
         
-        // Initialize WTelegram Client
-        _client = new Client(Config);
+        // Ensure session file directory exists
+        Directory.CreateDirectory(Path.GetDirectoryName(_sessionPath)!);
         
-        string? Config(string what)
+        // Check if session file is already in use
+        lock (_sessionFileLock)
         {
-            return what switch
+            if (_activeSessionFiles.Contains(_sessionPath))
             {
-                "api_id" => apiId,
-                "api_hash" => apiHash,
-                "phone_number" => _phoneNumber,
-                "session_pathname" => sessionPath ?? Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "mtproto_session.dat"),
-                "verification_code" => WaitForVerificationCode(),
-                "password" => WaitFor2FAPassword(),
-                _ => null
-            };
+                // If same session file is in use, use a unique one
+                var basePath = Path.Combine(Path.GetDirectoryName(_sessionPath)!, Path.GetFileNameWithoutExtension(_sessionPath));
+                var extension = Path.GetExtension(_sessionPath);
+                var uniquePath = $"{basePath}_{Guid.NewGuid():N}{extension}";
+                Console.WriteLine($"⚠️ Session file {_sessionPath} is already in use. Using unique path: {uniquePath}");
+                _sessionPath = uniquePath;
+            }
+            _activeSessionFiles.Add(_sessionPath);
         }
+        
+        // Helper method to create client with retry logic for corrupt session files
+        Client CreateClientWithRetry()
+        {
+            const int maxRetries = 3;
+            for (int attempt = 1; attempt <= maxRetries; attempt++)
+            {
+                try
+                {
+                    // If this is a placeholder service, delete any existing session file first
+                    if (_apiId == "0" || _apiHash == "placeholder" || _phoneNumber == "+0000000000")
+                    {
+                        if (File.Exists(_sessionPath))
+                        {
+                            try
+                            {
+                                File.Delete(_sessionPath);
+                                Console.WriteLine($"🧹 Deleted existing session file for placeholder service: {_sessionPath}");
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine($"⚠️ Could not delete session file: {ex.Message}");
+                            }
+                        }
+                    }
+                    else
+                    {
+                        // Check if session file exists and might be corrupt
+                        if (File.Exists(_sessionPath))
+                        {
+                            try
+                            {
+                                // Try to read the file to check if it's valid hex
+                                var fileContent = File.ReadAllText(_sessionPath);
+                                // If file is empty or invalid hex length, delete it
+                                if (string.IsNullOrWhiteSpace(fileContent) || fileContent.Trim().Length % 2 != 0)
+                                {
+                                    Console.WriteLine($"⚠️ Corrupt session file detected (invalid length). Deleting: {_sessionPath}");
+                                    File.Delete(_sessionPath);
+                                }
+                                else
+                                {
+                                    // Try to validate hex format
+                                    try
+                                    {
+                                        Convert.FromHexString(fileContent.Trim());
+                                    }
+                                    catch (FormatException)
+                                    {
+                                        // File is corrupt (invalid hex), delete it
+                                        Console.WriteLine($"⚠️ Corrupt session file detected (invalid hex format). Deleting: {_sessionPath}");
+                                        File.Delete(_sessionPath);
+                                    }
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine($"⚠️ Error checking session file: {ex.Message}. Attempting to delete and recreate.");
+                                try
+                                {
+                                    File.Delete(_sessionPath);
+                                }
+                                catch
+                                {
+                                    // Ignore delete errors
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Initialize WTelegram Client
+                    return new Client(Config);
+                }
+                catch (FormatException ex) when ((ex.Message.Contains("hex string") || ex.Message.Contains("not a valid hex")) && attempt < maxRetries)
+                {
+                    // Session file is corrupt, try to delete it and retry
+                    Console.WriteLine($"⚠️ Session file is corrupt during initialization (attempt {attempt}/{maxRetries}). Attempting to delete and retry: {_sessionPath}");
+                    try
+                    {
+                        if (File.Exists(_sessionPath))
+                        {
+                            File.Delete(_sessionPath);
+                            // Wait a bit before retry
+                            Thread.Sleep(100);
+                        }
+                    }
+                    catch (Exception deleteEx)
+                    {
+                        Console.WriteLine($"⚠️ Could not delete corrupt session file: {deleteEx.Message}");
+                    }
+                    
+                    // Continue to next retry
+                    continue;
+                }
+                catch (FormatException ex) when (ex.Message.Contains("hex string") || ex.Message.Contains("not a valid hex"))
+                {
+                    // Last attempt failed, throw the exception
+                    Console.WriteLine($"❌ Failed to initialize after {maxRetries} attempts. Session file is corrupt: {_sessionPath}");
+                    throw;
+                }
+            }
+            
+            // Should never reach here, but just in case
+            throw new InvalidOperationException("Failed to create WTelegramClient after multiple retries");
+        }
+        
+        try
+        {
+            _client = CreateClientWithRetry();
+        }
+        catch
+        {
+            // Remove from active files if initialization fails
+            lock (_sessionFileLock)
+            {
+                _activeSessionFiles.Remove(_sessionPath);
+            }
+            throw;
+        }
+    }
+
+    private string? Config(string what)
+    {
+        return what switch
+        {
+            "api_id" => _apiId,
+            "api_hash" => _apiHash,
+            "phone_number" => _phoneNumber,
+            "session_pathname" => _sessionPath ?? Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "mtproto_session.dat"),
+            "verification_code" => WaitForVerificationCode(),
+            "password" => WaitFor2FAPassword(),
+            _ => null
+        };
     }
 
     private static string? WaitForVerificationCode()
     {
         Console.WriteLine("⏳ Waiting for verification code...");
         Console.WriteLine("💬 Admin: Send the verification code to the bot using: /auth_code <your_code>");
+        Console.WriteLine("📱 Note: The code is sent to your Telegram app (not SMS). Check your Telegram app notifications or the app itself.");
+        
+        // Notify that verification code is needed
+        MtProtoAuthStore.NotifyVerificationCodeNeeded();
         
         // Wait up to 5 minutes for the code
         var timeout = DateTime.UtcNow.AddMinutes(5);
@@ -64,6 +212,9 @@ public class MtProtoService : IMtProtoService, IAsyncDisposable
     {
         Console.WriteLine("⏳ Waiting for 2FA password...");
         Console.WriteLine("💬 Admin: Send your 2FA password to the bot using: /auth_password <your_password>");
+        
+        // Notify that 2FA password is needed
+        MtProtoAuthStore.Notify2FAPasswordNeeded();
         
         // Wait up to 5 minutes for the password
         var timeout = DateTime.UtcNow.AddMinutes(5);
@@ -145,6 +296,16 @@ public class MtProtoService : IMtProtoService, IAsyncDisposable
                 _isAuthenticated = false;
                 _lastAuthAttempt = DateTime.UtcNow;
                 Console.WriteLine($"❌ Authentication failed: {ex.Message}");
+                Console.WriteLine($"❌ Exception type: {ex.GetType().FullName}");
+                Console.WriteLine($"❌ Stack trace: {ex.StackTrace}");
+                
+                // Check for specific Telegram errors
+                if (ex.Message.Contains("PHONE_MIGRATE") || ex.Message.Contains("PHONE_CODE"))
+                {
+                    Console.WriteLine($"💡 This error usually means MTProto needs to be reconfigured. Please use /mtproto_setup.");
+                    throw new InvalidOperationException("MTProto authentication failed. Please reconfigure MTProto using /mtproto_setup. Error: " + ex.Message, ex);
+                }
+                
                 Console.WriteLine($"💡 Will retry after {AuthRetryDelaySeconds} seconds.");
                 throw;
             }
@@ -258,7 +419,10 @@ public class MtProtoService : IMtProtoService, IAsyncDisposable
     {
         try
         {
+            Console.WriteLine($"📤 SendPhotoWithTimerAsync called for user {recipientTelegramUserId}");
+            Console.WriteLine($"🔐 Ensuring authentication...");
             await EnsureAuthenticatedAsync(cancellationToken);
+            Console.WriteLine($"✅ Authentication successful");
 
             // Validate contact first - catch exceptions to distinguish errors from missing contact
             bool isContact;
@@ -328,14 +492,25 @@ public class MtProtoService : IMtProtoService, IAsyncDisposable
             }
             else
             {
+                Console.WriteLine($"❌ Messages_SendMedia returned null");
                 return ContentDeliveryResult.Failure("❌ Failed to send photo");
             }
         }
         catch (Exception ex)
         {
             Console.WriteLine($"❌ Error sending photo: {ex.Message}");
-            Console.WriteLine($"Stack trace: {ex.StackTrace}");
-            return ContentDeliveryResult.Failure($"Failed to send photo: {ex.Message}");
+            Console.WriteLine($"❌ Exception type: {ex.GetType().FullName}");
+            Console.WriteLine($"❌ Stack trace: {ex.StackTrace}");
+            Console.WriteLine($"❌ Inner exception: {ex.InnerException?.Message ?? "None"}");
+            
+            // Check for specific Telegram errors
+            if (ex.Message.Contains("PHONE_MIGRATE") || ex.Message.Contains("PHONE_CODE") || ex.Message.Contains("not authenticated"))
+            {
+                Console.WriteLine($"💡 MTProto authentication issue detected. Please reconfigure using /mtproto_setup.");
+                return ContentDeliveryResult.Failure($"❌ MTProto authentication required. Please configure using /mtproto_setup. Error: {ex.Message}");
+            }
+            
+            return ContentDeliveryResult.Failure($"❌ خطا در ارسال عکس: {ex.Message}");
         }
     }
 
@@ -354,17 +529,22 @@ public class MtProtoService : IMtProtoService, IAsyncDisposable
             bool isContact;
             try
             {
+                Console.WriteLine($"🔍 Checking contact status for user {recipientTelegramUserId}...");
                 isContact = await IsContactAsync(recipientTelegramUserId, cancellationToken);
+                Console.WriteLine($"✅ Contact check result: {isContact}");
             }
             catch (Exception ex)
             {
                 // If there's an error checking contact, return error message instead of "contact required"
                 Console.WriteLine($"❌ Error checking contact status: {ex.Message}");
+                Console.WriteLine($"❌ Exception type: {ex.GetType().FullName}");
+                Console.WriteLine($"❌ Stack trace: {ex.StackTrace}");
                 return ContentDeliveryResult.Failure($"❌ خطا در بررسی وضعیت کانتکت: {ex.Message}");
             }
 
             if (!isContact)
             {
+                Console.WriteLine($"❌ User {recipientTelegramUserId} is not in contacts");
                 return ContentDeliveryResult.Failure("❌ لطفاً ابتدا حساب فرستنده را به کانتکت‌های خود اضافه کنید");
             }
 
@@ -484,9 +664,99 @@ public class MtProtoService : IMtProtoService, IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Reinitializes the MTProto service with new credentials
+    /// </summary>
+    public async Task ReinitializeAsync(string apiId, string apiHash, string phoneNumber, string? sessionPath = null, CancellationToken cancellationToken = default)
+    {
+        await _reinitLock.WaitAsync(cancellationToken);
+        try
+        {
+            Console.WriteLine("🔄 Reinitializing MTProto service with new credentials...");
+            
+            // Dispose old client and wait a bit to ensure file is released
+            if (_client != null)
+            {
+                try
+                {
+                    await _client.DisposeAsync();
+                    // Wait a bit to ensure file handles are released
+                    await Task.Delay(500, cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"⚠️ Error disposing old client: {ex.Message}");
+                }
+            }
+            
+            // Update credentials
+            _apiId = apiId ?? throw new ArgumentNullException(nameof(apiId));
+            _apiHash = apiHash ?? throw new ArgumentNullException(nameof(apiHash));
+            _phoneNumber = phoneNumber ?? throw new ArgumentNullException(nameof(phoneNumber));
+            _sessionPath = sessionPath;
+            
+            // Reset authentication state
+            _isAuthenticated = false;
+            _lastAuthAttempt = null;
+            
+            // Create new client with new credentials
+            // Use a unique session path to avoid conflicts if multiple instances exist
+            var finalSessionPath = _sessionPath ?? Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Data", "mtproto_session.dat");
+            Directory.CreateDirectory(Path.GetDirectoryName(finalSessionPath)!);
+            
+            _client = new Client(Config);
+            
+            Console.WriteLine("✅ MTProto service reinitialized successfully");
+        }
+        finally
+        {
+            _reinitLock.Release();
+        }
+    }
+
+    /// <summary>
+    /// Attempts to authenticate with the current credentials
+    /// </summary>
+    public async Task<bool> TestAuthenticationAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await EnsureAuthenticatedAsync(cancellationToken);
+            return _isAuthenticated;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Authentication test failed: {ex.Message}");
+            return false;
+        }
+    }
+
     public async ValueTask DisposeAsync()
     {
-        await _client.DisposeAsync();
+        if (_client != null)
+        {
+            try
+            {
+                await _client.DisposeAsync();
+                // Wait a bit to ensure file handles are released
+                await Task.Delay(500);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"⚠️ Error disposing MTProto client: {ex.Message}");
+            }
+        }
+        
+        // Remove session file from active list
+        if (!string.IsNullOrEmpty(_sessionPath))
+        {
+            lock (_sessionFileLock)
+            {
+                _activeSessionFiles.Remove(_sessionPath);
+            }
+        }
+        
         _initLock?.Dispose();
+        _reinitLock?.Dispose();
     }
 }

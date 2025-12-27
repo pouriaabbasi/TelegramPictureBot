@@ -35,6 +35,7 @@ public partial class TelegramUpdateHandler
     private readonly IDemoAccessRepository _demoAccessRepository;
     private readonly IViewHistoryRepository _viewHistoryRepository;
     private readonly IPlatformSettingsRepository _platformSettingsRepository;
+    private readonly IMtProtoService _mtProtoService;
 
     public TelegramUpdateHandler(
         IUserService userService,
@@ -57,7 +58,8 @@ public partial class TelegramUpdateHandler
         IUserStateRepository userStateRepository,
         IDemoAccessRepository demoAccessRepository,
         IViewHistoryRepository viewHistoryRepository,
-        IPlatformSettingsRepository platformSettingsRepository)
+        IPlatformSettingsRepository platformSettingsRepository,
+        IMtProtoService mtProtoService)
     {
         _userService = userService ?? throw new ArgumentNullException(nameof(userService));
         _contentAuthorizationService = contentAuthorizationService ?? throw new ArgumentNullException(nameof(contentAuthorizationService));
@@ -80,6 +82,7 @@ public partial class TelegramUpdateHandler
         _demoAccessRepository = demoAccessRepository ?? throw new ArgumentNullException(nameof(demoAccessRepository));
         _viewHistoryRepository = viewHistoryRepository ?? throw new ArgumentNullException(nameof(viewHistoryRepository));
         _platformSettingsRepository = platformSettingsRepository ?? throw new ArgumentNullException(nameof(platformSettingsRepository));
+        _mtProtoService = mtProtoService ?? throw new ArgumentNullException(nameof(mtProtoService));
     }
 
     /// <summary>
@@ -87,35 +90,48 @@ public partial class TelegramUpdateHandler
     /// </summary>
     public async Task HandleMessageAsync(TelegramMessage message, CancellationToken cancellationToken = default)
     {
-        // Get or create user
-        var userInfo = new TelegramUserInfo
+        try
         {
-            Id = message.From.Id,
-            IsBot = message.From.IsBot,
-            FirstName = message.From.FirstName,
-            LastName = message.From.LastName,
-            Username = message.From.Username,
-            LanguageCode = message.From.LanguageCode
-        };
+            Console.WriteLine($"📨 HandleMessageAsync called. Text: {message.Text ?? "(no text)"}, From: {message.From.Id}, ChatId: {message.ChatId}");
+            
+            // Get or create user
+            var userInfo = new TelegramUserInfo
+            {
+                Id = message.From.Id,
+                IsBot = message.From.IsBot,
+                FirstName = message.From.FirstName,
+                LastName = message.From.LastName,
+                Username = message.From.Username,
+                LanguageCode = message.From.LanguageCode
+            };
 
-        var user = await _userService.GetOrCreateUserAsync(userInfo, cancellationToken);
+            Console.WriteLine($"👤 Getting or creating user: {userInfo.Id}");
+            var user = await _userService.GetOrCreateUserAsync(userInfo, cancellationToken);
+            Console.WriteLine($"✅ User retrieved/created: {user.Id}");
 
         // Get full user entity for role checking
         var userEntity = await _userRepository.GetByIdAsync(user.Id, cancellationToken);
 
         // Check if user has an active state (ongoing workflow)
+        Console.WriteLine($"🔍 Checking for active user state for user {user.Id}...");
         var userState = await _userStateRepository.GetActiveStateAsync(user.Id, cancellationToken);
         
-        if (userState != null && !userState.IsExpired())
+        if (userState != null)
         {
-            Console.WriteLine($"📋 User has active state: {userState.StateType}, Data: {userState.StateData}");
-            // Handle state-based input
-            await HandleStateBasedInputAsync(user.Id, message.ChatId, userState, message, cancellationToken);
-            return;
-        }
-        else if (userState != null)
-        {
-            Console.WriteLine($"⏰ User state expired: {userState.StateType}");
+            Console.WriteLine($"📋 User state found: {userState.StateType}, Expired: {userState.IsExpired()}, Data: {userState.StateData ?? "(null)"}");
+            
+            if (!userState.IsExpired())
+            {
+                Console.WriteLine($"✅ User has active state: {userState.StateType}, calling HandleStateBasedInputAsync...");
+                // Handle state-based input
+                await HandleStateBasedInputAsync(user.Id, message.ChatId, userState, message, cancellationToken);
+                Console.WriteLine($"✅ HandleStateBasedInputAsync completed");
+                return;
+            }
+            else
+            {
+                Console.WriteLine($"⏰ User state expired: {userState.StateType}");
+            }
         }
         else
         {
@@ -123,29 +139,190 @@ public partial class TelegramUpdateHandler
         }
 
         // Handle admin authentication commands (for MTProto setup)
-        if (userEntity?.Role == Domain.Enums.UserRole.Admin)
+        // Check if user is admin (check both userEntity and via authorization service)
+        var isAdmin = userEntity?.Role == Domain.Enums.UserRole.Admin;
+        if (!isAdmin && userEntity != null)
         {
+            // Double-check using authorization service
+            isAdmin = await _authorizationService.IsAdminAsync(user.Id, cancellationToken);
+        }
+        
+        if (isAdmin)
+        {
+            // Handle /mtproto_setup command (check before other commands to ensure it's processed)
+            if (message.Text != null && 
+                (message.Text.Equals("/mtproto_setup", StringComparison.OrdinalIgnoreCase) ||
+                 message.Text.StartsWith("/mtproto_setup@", StringComparison.OrdinalIgnoreCase) ||
+                 message.Text.StartsWith("/mtproto_setup ", StringComparison.OrdinalIgnoreCase)))
+            {
+                await HandleMtProtoSetupStartAsync(user.Id, message.ChatId, cancellationToken);
+                return;
+            }
+            
             if (message.Text?.StartsWith("/auth_code ", StringComparison.OrdinalIgnoreCase) == true)
             {
                 var code = message.Text.Substring("/auth_code ".Length).Trim();
+                
+                if (string.IsNullOrWhiteSpace(code))
+                {
+                    await _telegramBotService.SendMessageAsync(
+                        message.ChatId,
+                        "❌ Please provide a verification code.\n\n" +
+                        "Usage: `/auth_code <your_code>`\n\n" +
+                        "Example: `/auth_code 12345`",
+                        cancellationToken);
+                    return;
+                }
+                
+                // Set the verification code FIRST
                 Infrastructure.Services.MtProtoAuthStore.SetVerificationCode(code);
+                
+                // Send immediate confirmation
                 await _telegramBotService.SendMessageAsync(
                     message.ChatId,
-                    $"✅ Verification code received: {code}\n\n" +
-                    "The MTProto service will use this code for authentication.",
+                    $"✅ Verification code received: `{code}`\n\n" +
+                    "🔄 Attempting to use this code for authentication...\n\n" +
+                    "⏳ Please wait while authentication completes...",
                     cancellationToken);
+                
+                // Try to trigger authentication - if it's waiting, it will use the code
+                // If it timed out, we'll reset and retry
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        // Small delay to ensure code is stored
+                        await Task.Delay(500, cancellationToken);
+                        
+                        // Reset authentication state to allow retry (in case previous attempt timed out)
+                        if (_mtProtoService is Infrastructure.Services.LazyMtProtoService lazyService)
+                        {
+                            var underlyingService = lazyService.GetUnderlyingService();
+                            if (underlyingService != null)
+                            {
+                                underlyingService.ResetAuthentication();
+                            }
+                        }
+                        else if (_mtProtoService is Infrastructure.Services.MtProtoService mtProtoServiceDirect)
+                        {
+                            mtProtoServiceDirect.ResetAuthentication();
+                        }
+                        
+                        // Try authentication - it will use the stored code
+                        var authResult = await _mtProtoService.TestAuthenticationAsync(cancellationToken);
+                        if (authResult)
+                        {
+                            await _telegramBotService.SendMessageAsync(
+                                message.ChatId,
+                                "✅ MTProto authentication successful!\n\n" +
+                                "The service is now ready to use.",
+                                cancellationToken);
+                        }
+                        else
+                        {
+                            await _telegramBotService.SendMessageAsync(
+                                message.ChatId,
+                                "⚠️ Authentication attempt completed but result is unclear.\n\n" +
+                                "Please check if you received a 2FA password request.\n\n" +
+                                "If you need to provide a 2FA password, use:\n" +
+                                "`/auth_password <your_password>`",
+                                cancellationToken);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"⚠️ Error during authentication: {ex.Message}");
+                        await _telegramBotService.SendMessageAsync(
+                            message.ChatId,
+                            $"⚠️ Authentication error: {ex.Message}\n\n" +
+                            "The code has been stored. If authentication is still waiting, it will use this code.\n\n" +
+                            "If you receive a new verification code, please send it using `/auth_code <code>`",
+                            cancellationToken);
+                    }
+                }, cancellationToken);
+                
                 return;
             }
             
             if (message.Text?.StartsWith("/auth_password ", StringComparison.OrdinalIgnoreCase) == true)
             {
                 var password = message.Text.Substring("/auth_password ".Length).Trim();
+                
+                if (string.IsNullOrWhiteSpace(password))
+                {
+                    await _telegramBotService.SendMessageAsync(
+                        message.ChatId,
+                        "❌ Please provide your 2FA password.\n\n" +
+                        "Usage: `/auth_password <your_password>`\n\n" +
+                        "Example: `/auth_password mypassword123`",
+                        cancellationToken);
+                    return;
+                }
+                
+                // Set the 2FA password FIRST
                 Infrastructure.Services.MtProtoAuthStore.Set2FAPassword(password);
+                
+                // Send immediate confirmation
                 await _telegramBotService.SendMessageAsync(
                     message.ChatId,
                     "✅ 2FA password received.\n\n" +
-                    "The MTProto service will use this password for authentication.",
+                    "🔄 Attempting to use this password for authentication...\n\n" +
+                    "⏳ Please wait while authentication completes...",
                     cancellationToken);
+                
+                // Try to trigger authentication - if it's waiting, it will use the password
+                // If it timed out, we'll reset and retry
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        // Small delay to ensure password is stored
+                        await Task.Delay(500, cancellationToken);
+                        
+                        // Reset authentication state to allow retry (in case previous attempt timed out)
+                        if (_mtProtoService is Infrastructure.Services.LazyMtProtoService lazyService)
+                        {
+                            var underlyingService = lazyService.GetUnderlyingService();
+                            if (underlyingService != null)
+                            {
+                                underlyingService.ResetAuthentication();
+                            }
+                        }
+                        else if (_mtProtoService is Infrastructure.Services.MtProtoService mtProtoServiceDirect)
+                        {
+                            mtProtoServiceDirect.ResetAuthentication();
+                        }
+                        
+                        // Try authentication - it will use the stored password
+                        var authResult = await _mtProtoService.TestAuthenticationAsync(cancellationToken);
+                        if (authResult)
+                        {
+                            await _telegramBotService.SendMessageAsync(
+                                message.ChatId,
+                                "✅ MTProto authentication successful!\n\n" +
+                                "The service is now ready to use.",
+                                cancellationToken);
+                        }
+                        else
+                        {
+                            await _telegramBotService.SendMessageAsync(
+                                message.ChatId,
+                                "⚠️ Authentication attempt completed but result is unclear.\n\n" +
+                                "Please check the logs for more details.",
+                                cancellationToken);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"⚠️ Error during authentication: {ex.Message}");
+                        await _telegramBotService.SendMessageAsync(
+                            message.ChatId,
+                            $"⚠️ Authentication error: {ex.Message}\n\n" +
+                            "The password has been stored. If authentication is still waiting, it will use this password.",
+                            cancellationToken);
+                    }
+                }, cancellationToken);
+                
                 return;
             }
             
@@ -163,12 +340,38 @@ public partial class TelegramUpdateHandler
         // Only handle /start command, everything else is buttons
         if (message.Text?.Equals("/start", StringComparison.OrdinalIgnoreCase) == true)
         {
+            Console.WriteLine($"🚀 Handling /start command for user {user.Id}");
             await ShowMainMenuAsync(user.Id, message.ChatId, cancellationToken);
+            Console.WriteLine($"✅ /start command completed");
             return;
         }
 
         // For any other message, show the main menu
+        Console.WriteLine($"📋 Showing main menu for user {user.Id}, text: {message.Text ?? "(no text)"}");
         await ShowMainMenuAsync(user.Id, message.ChatId, cancellationToken);
+        Console.WriteLine($"✅ Main menu shown");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ ERROR in HandleMessageAsync: {ex.Message}");
+            Console.WriteLine($"❌ Stack trace: {ex.StackTrace}");
+            Console.WriteLine($"❌ Inner exception: {ex.InnerException?.Message ?? "None"}");
+            
+            // Try to send error message to user
+            try
+            {
+                await _telegramBotService.SendMessageAsync(
+                    message.ChatId,
+                    "❌ خطا در پردازش پیام شما. لطفاً دوباره تلاش کنید.",
+                    cancellationToken);
+            }
+            catch (Exception sendEx)
+            {
+                Console.WriteLine($"❌ Failed to send error message: {sendEx.Message}");
+            }
+            
+            throw; // Re-throw to be caught by TelegramBotPollingService
+        }
     }
 
     /// <summary>
@@ -239,6 +442,20 @@ public partial class TelegramUpdateHandler
                     break;
             }
             return;
+        }
+
+        // Handle MTProto setup
+        if (action == "mtproto")
+        {
+            if (parts.Length >= 2)
+            {
+                var mtprotoAction = string.Join("_", parts.Skip(1));
+                if (mtprotoAction == "setup_start")
+                {
+                    await HandleMtProtoSetupStartAsync(user.Id, chatId, cancellationToken);
+                    return;
+                }
+            }
         }
 
         // Handle specific actions (existing logic)
@@ -406,6 +623,8 @@ public partial class TelegramUpdateHandler
     {
         try
         {
+            Console.WriteLine($"🔄 HandleStateBasedInputAsync called. StateType: {userState.StateType}, Text: {message.Text ?? "(no text)"}");
+            
             switch (userState.StateType)
             {
                 case Domain.Enums.UserStateType.UploadingPremiumMedia:
@@ -440,6 +659,18 @@ public partial class TelegramUpdateHandler
                     await HandlePlatformSettingInputAsync(userId, chatId, userState.StateData, message.Text, cancellationToken);
                     break;
 
+                case Domain.Enums.UserStateType.MtProtoSetupApiId:
+                    await HandleMtProtoSetupApiIdInputAsync(userId, chatId, message.Text, cancellationToken);
+                    break;
+
+                case Domain.Enums.UserStateType.MtProtoSetupApiHash:
+                    await HandleMtProtoSetupApiHashInputAsync(userId, chatId, userState.StateData, message.Text, cancellationToken);
+                    break;
+
+                case Domain.Enums.UserStateType.MtProtoSetupPhoneNumber:
+                    await HandleMtProtoSetupPhoneNumberInputAsync(userId, chatId, userState.StateData, message.Text, cancellationToken);
+                    break;
+
                 default:
                     await _userStateRepository.ClearStateAsync(userId, cancellationToken);
                     await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -466,15 +697,22 @@ public partial class TelegramUpdateHandler
     /// </summary>
     private async Task ShowMainMenuAsync(Guid userId, long chatId, CancellationToken cancellationToken)
     {
-        var user = await _userRepository.GetByIdAsync(userId, cancellationToken);
-        var isAdmin = user?.Role == Domain.Enums.UserRole.Admin;
-        var isModel = user?.Role == Domain.Enums.UserRole.Model;
+        try
+        {
+            Console.WriteLine($"📋 ShowMainMenuAsync called for userId: {userId}, chatId: {chatId}");
+            
+            var user = await _userRepository.GetByIdAsync(userId, cancellationToken);
+            Console.WriteLine($"👤 User retrieved: {user?.Id}, Role: {user?.Role}");
+            
+            var isAdmin = user?.Role == Domain.Enums.UserRole.Admin;
+            var isModel = user?.Role == Domain.Enums.UserRole.Model;
 
-        var message = "Welcome to Premium Content Marketplace!\n\n" +
-                     "Browse content creators, subscribe to your favorites, and access exclusive content!\n\n" +
-                     "Choose an option below:";
+            var message = "Welcome to Premium Content Marketplace!\n\n" +
+                         "Browse content creators, subscribe to your favorites, and access exclusive content!\n\n" +
+                         "Choose an option below:";
 
-        var buttons = new List<List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>>();
+            Console.WriteLine($"📝 Message prepared, building buttons...");
+            var buttons = new List<List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>>();
 
         // Row 1: Browse Models
         buttons.Add(new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
@@ -534,8 +772,20 @@ public partial class TelegramUpdateHandler
             });
         }
 
-        var keyboard = new Telegram.Bot.Types.ReplyMarkups.InlineKeyboardMarkup(buttons);
-        await _telegramBotService.SendMessageWithButtonsAsync(chatId, message, keyboard, cancellationToken);
+            Console.WriteLine($"⌨️ Keyboard created with {buttons.Count} rows");
+            var keyboard = new Telegram.Bot.Types.ReplyMarkups.InlineKeyboardMarkup(buttons);
+            
+            Console.WriteLine($"📤 Sending message to chatId: {chatId}");
+            await _telegramBotService.SendMessageWithButtonsAsync(chatId, message, keyboard, cancellationToken);
+            Console.WriteLine($"✅ Message sent successfully to chatId: {chatId}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ ERROR in ShowMainMenuAsync: {ex.Message}");
+            Console.WriteLine($"❌ Stack trace: {ex.StackTrace}");
+            Console.WriteLine($"❌ Inner exception: {ex.InnerException?.Message ?? "None"}");
+            throw; // Re-throw to be caught by HandleMessageAsync
+        }
     }
 
     private async Task HandleSubscriptionsCommandAsync(long chatId, CancellationToken cancellationToken)
@@ -960,9 +1210,25 @@ public partial class TelegramUpdateHandler
         }
         catch (Exception ex)
         {
+            Console.WriteLine($"❌ Error in HandleViewPhotoCommandAsync: {ex.Message}");
+            Console.WriteLine($"❌ Stack trace: {ex.StackTrace}");
+            
+            var errorMessage = "❌ خطا در ارسال عکس.\n\n";
+            
+            if (ex.Message.Contains("PHONE_MIGRATE") || ex.Message.Contains("not configured") || ex.Message.Contains("authentication"))
+            {
+                errorMessage += "⚠️ MTProto service is not properly configured or authenticated.\n\n";
+                errorMessage += "Please contact the admin to configure MTProto using `/mtproto_setup`.";
+            }
+            else
+            {
+                errorMessage += $"خطا: {ex.Message}\n\n";
+                errorMessage += "لطفاً دوباره تلاش کنید یا با ادمین تماس بگیرید.";
+            }
+            
             await _telegramBotService.SendMessageAsync(
                 chatId,
-                $"Error viewing photo: {ex.Message}",
+                errorMessage,
                 cancellationToken);
         }
     }
@@ -2327,7 +2593,15 @@ public partial class TelegramUpdateHandler
 
             var buttons = new List<List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>>();
 
-            // MTProto Settings
+            // MTProto Setup Wizard
+            buttons.Add(new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
+            {
+                Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
+                    "🔧 Setup MTProto (Wizard)",
+                    "mtproto_setup_start")
+            });
+
+            // MTProto Settings (Individual)
             buttons.Add(new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
             {
                 Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
@@ -2370,6 +2644,68 @@ public partial class TelegramUpdateHandler
         catch (Exception ex)
         {
             await _telegramBotService.SendMessageAsync(chatId, $"Error loading settings: {ex.Message}", cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// Starts MTProto setup wizard
+    /// </summary>
+    private async Task HandleMtProtoSetupStartAsync(Guid userId, long chatId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var isAdmin = await _authorizationService.IsAdminAsync(userId, cancellationToken);
+            if (!isAdmin)
+            {
+                await _telegramBotService.SendMessageAsync(chatId, "❌ Only admins can configure MTProto.", cancellationToken);
+                return;
+            }
+
+            // Clear all existing MTProto settings (including soft-deleted ones) to ensure clean setup
+            // This prevents issues with multiple records or stale data
+            await _platformSettingsRepository.ClearMtProtoSettingsAsync(cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+            Console.WriteLine("✅ Cleared all existing MTProto settings before starting setup");
+
+            var message = "🔧 MTProto Setup Wizard\n\n" +
+                         "This wizard will guide you through setting up MTProto credentials.\n\n" +
+                         "⚠️ **Note:** All previous MTProto settings have been cleared.\n\n" +
+                         "You'll need:\n" +
+                         "1️⃣ API ID (from https://my.telegram.org/apps)\n" +
+                         "2️⃣ API Hash (from https://my.telegram.org/apps)\n" +
+                         "3️⃣ Phone Number (with country code, e.g., +1234567890)\n\n" +
+                         "⚠️ Important: After entering credentials, you may need to:\n" +
+                         "• Enter verification code sent to your phone/app\n" +
+                         "• Enter 2FA password (if enabled)\n\n" +
+                         "Use /auth_code <code> and /auth_password <password> commands if needed.\n\n" +
+                         "Let's start! Please send your **API ID**:";
+
+            // Set user state to step 1: API ID
+            await _userStateRepository.SetStateAsync(
+                userId,
+                Domain.Enums.UserStateType.MtProtoSetupApiId,
+                null,
+                10, // 10 minutes timeout
+                cancellationToken);
+            
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            var buttons = new List<List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>>
+            {
+                new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
+                {
+                    Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
+                        "❌ Cancel",
+                        "admin_settings")
+                }
+            };
+
+            var keyboard = new Telegram.Bot.Types.ReplyMarkups.InlineKeyboardMarkup(buttons);
+            await _telegramBotService.SendMessageWithButtonsAsync(chatId, message, keyboard, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            await _telegramBotService.SendMessageAsync(chatId, $"❌ Error: {ex.Message}", cancellationToken);
         }
     }
 

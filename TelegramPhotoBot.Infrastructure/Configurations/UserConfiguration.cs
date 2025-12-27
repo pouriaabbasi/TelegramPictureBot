@@ -59,11 +59,19 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Metadata.FindNavigation(nameof(User.Subscriptions))!
             .SetPropertyAccessMode(PropertyAccessMode.Field);
         
-        builder.Metadata.FindNavigation(nameof(User.ModelSubscriptions))!
-            .SetPropertyAccessMode(PropertyAccessMode.Field);
+        var modelSubscriptionsNav = builder.Metadata.FindNavigation(nameof(User.ModelSubscriptions));
+        if (modelSubscriptionsNav != null)
+        {
+            modelSubscriptionsNav.SetPropertyAccessMode(PropertyAccessMode.Field);
+            // Explicitly configure that ModelSubscriptions uses the same foreign key as Purchases (UserId from Purchase base class)
+            modelSubscriptionsNav.SetIsEagerLoaded(false);
+        }
 
-        builder.Metadata.FindNavigation(nameof(User.Purchases))!
-            .SetPropertyAccessMode(PropertyAccessMode.Field);
+        var purchasesNav = builder.Metadata.FindNavigation(nameof(User.Purchases));
+        if (purchasesNav != null)
+        {
+            purchasesNav.SetPropertyAccessMode(PropertyAccessMode.Field);
+        }
 
         // Indexes
         builder.HasIndex(u => u.Username)

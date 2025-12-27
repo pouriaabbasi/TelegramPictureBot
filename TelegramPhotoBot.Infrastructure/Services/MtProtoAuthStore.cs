@@ -8,6 +8,77 @@ namespace TelegramPhotoBot.Infrastructure.Services;
 public static class MtProtoAuthStore
 {
     private static readonly ConcurrentDictionary<string, string> _credentials = new();
+    private static Func<long, Task>? _onVerificationCodeNeeded;
+    private static Func<long, Task>? _on2FAPasswordNeeded;
+    private static long? _currentChatId;
+    
+    /// <summary>
+    /// Sets the chat ID for the current authentication session
+    /// </summary>
+    public static void SetCurrentChatId(long chatId)
+    {
+        _currentChatId = chatId;
+    }
+    
+    /// <summary>
+    /// Sets the callback to be called when verification code is needed
+    /// </summary>
+    public static void SetVerificationCodeCallback(Func<long, Task> callback)
+    {
+        _onVerificationCodeNeeded = callback;
+    }
+    
+    /// <summary>
+    /// Sets the callback to be called when 2FA password is needed
+    /// </summary>
+    public static void Set2FAPasswordCallback(Func<long, Task> callback)
+    {
+        _on2FAPasswordNeeded = callback;
+    }
+    
+    /// <summary>
+    /// Notifies that verification code is needed
+    /// </summary>
+    public static void NotifyVerificationCodeNeeded()
+    {
+        if (_currentChatId.HasValue && _onVerificationCodeNeeded != null)
+        {
+            // Fire and forget - don't block the authentication thread
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await _onVerificationCodeNeeded(_currentChatId.Value);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"❌ Error in verification code notification callback: {ex.Message}");
+                }
+            });
+        }
+    }
+    
+    /// <summary>
+    /// Notifies that 2FA password is needed
+    /// </summary>
+    public static void Notify2FAPasswordNeeded()
+    {
+        if (_currentChatId.HasValue && _on2FAPasswordNeeded != null)
+        {
+            // Fire and forget - don't block the authentication thread
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await _on2FAPasswordNeeded(_currentChatId.Value);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"❌ Error in 2FA password notification callback: {ex.Message}");
+                }
+            });
+        }
+    }
     
     /// <summary>
     /// Sets the verification code sent to user's phone/app
@@ -54,11 +125,14 @@ public static class MtProtoAuthStore
     }
     
     /// <summary>
-    /// Clears all stored credentials
+    /// Clears all stored credentials and callbacks
     /// </summary>
     public static void Clear()
     {
         _credentials.Clear();
+        _currentChatId = null;
+        _onVerificationCodeNeeded = null;
+        _on2FAPasswordNeeded = null;
         Console.WriteLine("🧹 Cleared all stored credentials");
     }
 }

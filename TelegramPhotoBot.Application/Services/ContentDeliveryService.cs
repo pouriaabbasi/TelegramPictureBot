@@ -30,15 +30,22 @@ public class ContentDeliveryService : IContentDeliveryService
 
     public async Task<ContentDeliveryResult> SendPhotoAsync(SendPhotoRequest request, CancellationToken cancellationToken = default)
     {
+        Console.WriteLine($"📤 ContentDeliveryService.SendPhotoAsync called for user {request.RecipientTelegramUserId}, photoId: {request.PhotoId}");
+        
         // Validate contact before sending - catch exceptions to show error messages
         bool isContact;
         try
         {
+            Console.WriteLine($"🔍 Validating contact for user {request.RecipientTelegramUserId}...");
             isContact = await ValidateContactAsync(request.RecipientTelegramUserId, cancellationToken);
+            Console.WriteLine($"✅ Contact validation result: {isContact}");
         }
         catch (Exception ex)
         {
             // If there's an error checking contact, return error message
+            Console.WriteLine($"❌ Exception during contact validation: {ex.Message}");
+            Console.WriteLine($"❌ Exception type: {ex.GetType().FullName}");
+            Console.WriteLine($"❌ Stack trace: {ex.StackTrace}");
             return ContentDeliveryResult.Failure($"❌ خطا در بررسی وضعیت کانتکت: {ex.Message}");
         }
 
@@ -72,12 +79,34 @@ public class ContentDeliveryService : IContentDeliveryService
         }
 
         // Send photo via MTProto with self-destruct timer
-        return await _mtProtoService.SendPhotoWithTimerAsync(
-            request.RecipientTelegramUserId,
-            request.FilePath,
-            request.Caption,
-            request.SelfDestructSeconds,
-            cancellationToken);
+        Console.WriteLine($"📤 Calling MTProto SendPhotoWithTimerAsync for user {request.RecipientTelegramUserId}...");
+        try
+        {
+            var result = await _mtProtoService.SendPhotoWithTimerAsync(
+                request.RecipientTelegramUserId,
+                request.FilePath,
+                request.Caption,
+                request.SelfDestructSeconds,
+                cancellationToken);
+            
+            if (result.IsSuccess)
+            {
+                Console.WriteLine($"✅ Photo sent successfully via MTProto");
+            }
+            else
+            {
+                Console.WriteLine($"❌ Photo send failed: {result.ErrorMessage}");
+            }
+            
+            return result;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Exception in SendPhotoWithTimerAsync: {ex.Message}");
+            Console.WriteLine($"❌ Exception type: {ex.GetType().FullName}");
+            Console.WriteLine($"❌ Stack trace: {ex.StackTrace}");
+            return ContentDeliveryResult.Failure($"❌ خطا در ارسال عکس: {ex.Message}");
+        }
     }
 
     public async Task<ContentDeliveryResult> SendVideoAsync(SendVideoRequest request, CancellationToken cancellationToken = default)

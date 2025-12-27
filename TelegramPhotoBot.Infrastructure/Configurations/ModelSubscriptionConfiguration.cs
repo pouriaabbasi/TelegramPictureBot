@@ -38,6 +38,11 @@ public class ModelSubscriptionConfiguration : IEntityTypeConfiguration<ModelSubs
             .HasForeignKey(ms => ms.ModelId)
             .OnDelete(DeleteBehavior.Restrict);
 
+        // Note: User relationship is inherited from Purchase base class
+        // The UserId foreign key is already configured in PurchaseConfiguration
+        // We just need to ensure the navigation property is properly mapped
+        // This prevents EF Core from creating a shadow property UserId1
+
         // Indexes
         builder.HasIndex(ms => ms.UserId);
 

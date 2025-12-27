@@ -23,6 +23,9 @@ public class MtProtoService : IMtProtoService, IAsyncDisposable
     private readonly SemaphoreSlim _reinitLock = new(1, 1);
     private DateTime? _lastAuthAttempt;
     private const int AuthRetryDelaySeconds = 60; // Wait 60 seconds before retrying after failure
+    
+    // Track what's needed for login (like the working example)
+    public string? ConfigNeeded { get; private set; } = "connecting";
 
     public MtProtoService(string apiId, string apiHash, string phoneNumber, string? sessionPath = null)
     {
@@ -241,6 +244,9 @@ public class MtProtoService : IMtProtoService, IAsyncDisposable
         {
             Console.WriteLine($"🔐 Performing login with provided info...");
             var result = await _client.Login(loginInfo);
+            
+            // Update ConfigNeeded to track state
+            ConfigNeeded = result;
             
             if (result == null)
             {

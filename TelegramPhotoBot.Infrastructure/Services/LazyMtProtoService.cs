@@ -18,6 +18,22 @@ public class LazyMtProtoService : IMtProtoService
     {
         _serviceFactory = serviceFactory ?? throw new ArgumentNullException(nameof(serviceFactory));
     }
+    
+    public string? ConfigNeeded
+    {
+        get
+        {
+            try
+            {
+                var service = GetOrCreateService();
+                return service.ConfigNeeded;
+            }
+            catch
+            {
+                return "not_configured";
+            }
+        }
+    }
 
     private IMtProtoService GetOrCreateService()
     {

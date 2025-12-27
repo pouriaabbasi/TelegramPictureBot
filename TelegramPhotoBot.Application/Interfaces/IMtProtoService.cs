@@ -8,6 +8,11 @@ namespace TelegramPhotoBot.Application.Interfaces;
 public interface IMtProtoService
 {
     /// <summary>
+    /// Gets what configuration is currently needed (null if authenticated, "verification_code", "password", etc.)
+    /// </summary>
+    string? ConfigNeeded { get; }
+    
+    /// <summary>
     /// Checks if a user has the sender account in their contacts
     /// </summary>
     Task<bool> IsContactAsync(long recipientTelegramUserId, CancellationToken cancellationToken = default);

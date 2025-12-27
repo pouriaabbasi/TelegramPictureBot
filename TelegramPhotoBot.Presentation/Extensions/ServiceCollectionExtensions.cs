@@ -73,37 +73,12 @@ public static class ServiceCollectionExtensions
         // MTProto Service - Lazy initialization to avoid errors on startup
         // Service will only be created when actually needed (first use)
         // This prevents errors when credentials are not yet configured
-        services.AddSingleton<IMtProtoService>(sp => new LazyMtProtoService(() =>
-        {
-            using var scope = sp.CreateScope();
-            var settingsRepo = scope.ServiceProvider.GetRequiredService<IPlatformSettingsRepository>();
-            var config = scope.ServiceProvider.GetRequiredService<IConfiguration>();
-            
-            var apiId = settingsRepo.GetValueAsync(TelegramPhotoBot.Domain.Entities.PlatformSettings.Keys.MtProtoApiId).Result
-                       ?? config["Telegram:MtProto:ApiId"];
-            
-            var apiHash = settingsRepo.GetValueAsync(TelegramPhotoBot.Domain.Entities.PlatformSettings.Keys.MtProtoApiHash).Result
-                         ?? config["Telegram:MtProto:ApiHash"];
-            
-            var phoneNumber = settingsRepo.GetValueAsync(TelegramPhotoBot.Domain.Entities.PlatformSettings.Keys.MtProtoPhoneNumber).Result
-                             ?? config["Telegram:MtProto:PhoneNumber"];
-            
-            // If credentials are not found, throw exception - service will handle it gracefully
-            if (string.IsNullOrWhiteSpace(apiId) || string.IsNullOrWhiteSpace(apiHash) || string.IsNullOrWhiteSpace(phoneNumber))
-            {
-                throw new InvalidOperationException("MTProto credentials not configured. Please use /mtproto_setup to configure.");
-            }
-            
-            var sessionPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Data", "mtproto_session.dat");
-            Directory.CreateDirectory(Path.GetDirectoryName(sessionPath)!);
-            
-            Console.WriteLine($"📱 Initializing MTProto with phone: {phoneNumber}");
-            return new MtProtoService(apiId, apiHash, phoneNumber, sessionPath);
-        }));
-        
-        // Register MtProtoBackgroundService as a hosted service (like the working example)
+        // Register MtProtoBackgroundService as both a singleton and a hosted service (like the working example)
         services.AddSingleton<MtProtoBackgroundService>();
         services.AddHostedService(sp => sp.GetRequiredService<MtProtoBackgroundService>());
+        
+        // Register IMtProtoService to use the same MtProtoBackgroundService instance
+        services.AddSingleton<IMtProtoService>(sp => sp.GetRequiredService<MtProtoBackgroundService>());
 
         return services;
     }

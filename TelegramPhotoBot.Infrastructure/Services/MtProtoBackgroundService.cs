@@ -94,7 +94,7 @@ public sealed class MtProtoBackgroundService : BackgroundService, IMtProtoServic
     {
         try
         {
-            Console.WriteLine($"🔍 Checking if user {recipientTelegramUserId} is in sender's contacts...");
+            Console.WriteLine($"🔍 Checking contact status for user {recipientTelegramUserId}...");
             
             var dialogs = await Client.Messages_GetAllDialogs();
             var user = dialogs.users.Values.OfType<User>()
@@ -106,26 +106,22 @@ public sealed class MtProtoBackgroundService : BackgroundService, IMtProtoServic
                 return false;
             }
 
-            // لاگ کردن اطلاعات کامل user به صورت JSON
+            // لاگ کردن اطلاعات user
             Console.WriteLine($"📊 User Details:");
             Console.WriteLine($"  - ID: {user.id}");
             Console.WriteLine($"  - Username: {user.username}");
             Console.WriteLine($"  - First Name: {user.first_name}");
-            Console.WriteLine($"  - Last Name: {user.last_name}");
-            Console.WriteLine($"  - Phone: {user.phone}");
             Console.WriteLine($"  - Access Hash: {user.access_hash}");
-            Console.WriteLine($"📊 Flag Checks:");
             Console.WriteLine($"  - contact: {user.flags.HasFlag(User.Flags.contact)}");
             Console.WriteLine($"  - mutual_contact: {user.flags.HasFlag(User.Flags.mutual_contact)}");
 
-            // اگر در کانتکت نیست، اضافه می‌کنیم
+            // مرحله 1: اگر در کانتکت نیست، از طرف فرستنده اضافه می‌کنیم
             if (!user.flags.HasFlag(User.Flags.contact))
             {
-                Console.WriteLine($"⚠️ User {recipientTelegramUserId} is not in contacts. Adding automatically...");
+                Console.WriteLine($"⚠️ User {recipientTelegramUserId} is not in sender's contacts. Adding automatically...");
                 
                 try
                 {
-                    // اضافه کردن به کانتکت‌ها
                     var inputUser = new InputUser(user.id, user.access_hash);
                     var result = await Client.Contacts_AddContact(
                         id: inputUser,
@@ -135,35 +131,45 @@ public sealed class MtProtoBackgroundService : BackgroundService, IMtProtoServic
                         add_phone_privacy_exception: false
                     );
                     
-                    Console.WriteLine($"✅ Successfully added user {recipientTelegramUserId} to contacts!");
+                    Console.WriteLine($"✅ Successfully added user {recipientTelegramUserId} to sender's contacts!");
                     
-                    // حالا باید دوباره user رو fetch کنیم تا flag جدید رو بگیریم
+                    // دوباره fetch می‌کنیم
                     var updatedDialogs = await Client.Messages_GetAllDialogs();
-                    var updatedUser = updatedDialogs.users.Values.OfType<User>()
+                    user = updatedDialogs.users.Values.OfType<User>()
                         .FirstOrDefault(u => u.id == recipientTelegramUserId);
                     
-                    if (updatedUser != null)
+                    if (user == null)
                     {
-                        bool isNowContact = updatedUser.flags.HasFlag(User.Flags.contact);
-                        Console.WriteLine($"✅ Updated contact flag: {isNowContact}");
-                        return isNowContact;
+                        Console.WriteLine($"❌ Failed to fetch updated user info");
+                        return false;
                     }
                     
-                    return true; // فرض می‌کنیم موفق بوده
+                    Console.WriteLine($"📊 Updated flags - contact: {user.flags.HasFlag(User.Flags.contact)}, mutual_contact: {user.flags.HasFlag(User.Flags.mutual_contact)}");
                 }
                 catch (Exception addEx)
                 {
                     Console.WriteLine($"❌ Failed to add contact: {addEx.Message}");
-                    // اگر نتونستیم اضافه کنیم، false برمی‌گردونیم
                     return false;
                 }
             }
+            else
+            {
+                Console.WriteLine($"✅ User {recipientTelegramUserId} is already in sender's contacts");
+            }
             
-            // اگر از قبل در کانتکت بود
-            bool isContact = user.flags.HasFlag(User.Flags.contact);
-            Console.WriteLine($"✅ User {recipientTelegramUserId} is already in contacts: {isContact}");
+            // مرحله 2: چک می‌کنیم که mutual_contact هست یا نه
+            // این یعنی subscriber هم باید sender رو توی کانتکتش اضافه کرده باشه
+            bool isMutualContact = user.flags.HasFlag(User.Flags.mutual_contact);
             
-            return isContact;
+            if (!isMutualContact)
+            {
+                Console.WriteLine($"⚠️ Not mutual contact! User {recipientTelegramUserId} has NOT added sender to their contacts.");
+                Console.WriteLine($"❌ Cannot send self-destructing media without mutual contact.");
+                return false;
+            }
+            
+            Console.WriteLine($"✅ Mutual contact confirmed! Both parties have each other in contacts.");
+            return true;
         }
         catch (Exception ex)
         {

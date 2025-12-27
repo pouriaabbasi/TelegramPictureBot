@@ -4,6 +4,7 @@ using TelegramPhotoBot.Application.Interfaces;
 using TelegramPhotoBot.Application.Interfaces.Repositories;
 using TelegramPhotoBot.Application.DTOs;
 using TL;
+using Telegram.Bot;
 
 namespace TelegramPhotoBot.Infrastructure.Services;
 
@@ -18,13 +19,16 @@ public sealed class MtProtoBackgroundService : BackgroundService, IMtProtoServic
 
     private readonly IPlatformSettingsRepository _settingsRepo;
     private readonly ILogger<MtProtoBackgroundService> _logger;
+    private readonly ITelegramBotClient _botClient;
 
     public MtProtoBackgroundService(
         IPlatformSettingsRepository settingsRepo,
-        ILogger<MtProtoBackgroundService> logger)
+        ILogger<MtProtoBackgroundService> logger,
+        ITelegramBotClient botClient)
     {
         _settingsRepo = settingsRepo;
         _logger = logger;
+        _botClient = botClient;
         
         WTelegram.Helpers.Log = (lvl, msg) => _logger.Log((LogLevel)lvl, msg);
         
@@ -186,6 +190,8 @@ public sealed class MtProtoBackgroundService : BackgroundService, IMtProtoServic
         int selfDestructSeconds,
         CancellationToken cancellationToken = default)
     {
+        string? tempFilePath = null;
+        
         try
         {
             Console.WriteLine($"📤 SendPhotoWithTimerAsync: user={recipientTelegramUserId}, file={filePath}, timer={selfDestructSeconds}s");
@@ -201,9 +207,51 @@ public sealed class MtProtoBackgroundService : BackgroundService, IMtProtoServic
                 return ContentDeliveryResult.Failure("User not found");
             }
 
-            // Upload file
-            Console.WriteLine($"📤 Uploading file: {filePath}");
-            var inputFile = await Client.UploadFileAsync(filePath, null);
+            string fileToUpload = filePath;
+            
+            // تشخیص اینکه filePath یک Telegram file ID است یا فایل محلی
+            if (!File.Exists(filePath) && !filePath.Contains("/") && !filePath.Contains("\\"))
+            {
+                // این یک Telegram file ID است - باید دانلود کنیم
+                Console.WriteLine($"📥 Detected Telegram file ID: {filePath}. Downloading...");
+                
+                tempFilePath = Path.Combine(Path.GetTempPath(), $"telegram_photo_{Guid.NewGuid()}.jpg");
+                
+                try
+                {
+                    // دانلود فایل از Bot API
+                    var file = await _botClient.GetFileAsync(filePath, cancellationToken);
+                    
+                    if (file.FilePath == null)
+                    {
+                        Console.WriteLine($"❌ Failed to get file path from Telegram");
+                        return ContentDeliveryResult.Failure("Failed to download photo from Telegram");
+                    }
+                    
+                    // دانلود به فایل موقت
+                    using (var fileStream = File.Create(tempFilePath))
+                    {
+                        await _botClient.DownloadFileAsync(file.FilePath, fileStream, cancellationToken);
+                    }
+                    
+                    Console.WriteLine($"✅ Downloaded to temp file: {tempFilePath}");
+                    fileToUpload = tempFilePath;
+                }
+                catch (Exception downloadEx)
+                {
+                    Console.WriteLine($"❌ Error downloading file: {downloadEx.Message}");
+                    return ContentDeliveryResult.Failure($"Failed to download photo: {downloadEx.Message}");
+                }
+            }
+            else if (!File.Exists(filePath))
+            {
+                Console.WriteLine($"❌ File not found: {filePath}");
+                return ContentDeliveryResult.Failure($"File not found: {filePath}");
+            }
+
+            // Upload file به MTProto
+            Console.WriteLine($"📤 Uploading file to MTProto: {fileToUpload}");
+            var inputFile = await Client.UploadFileAsync(fileToUpload, null);
             
             // Create media with TTL
             var media = new InputMediaUploadedPhoto
@@ -223,7 +271,24 @@ public sealed class MtProtoBackgroundService : BackgroundService, IMtProtoServic
         catch (Exception ex)
         {
             Console.WriteLine($"❌ Error sending photo: {ex.Message}");
+            Console.WriteLine($"❌ Stack trace: {ex.StackTrace}");
             return ContentDeliveryResult.Failure($"Error: {ex.Message}");
+        }
+        finally
+        {
+            // پاک کردن فایل موقت
+            if (tempFilePath != null && File.Exists(tempFilePath))
+            {
+                try
+                {
+                    File.Delete(tempFilePath);
+                    Console.WriteLine($"🗑️ Deleted temp file: {tempFilePath}");
+                }
+                catch (Exception cleanupEx)
+                {
+                    Console.WriteLine($"⚠️ Failed to delete temp file: {cleanupEx.Message}");
+                }
+            }
         }
     }
 

@@ -100,6 +100,10 @@ public static class ServiceCollectionExtensions
             Console.WriteLine($"📱 Initializing MTProto with phone: {phoneNumber}");
             return new MtProtoService(apiId, apiHash, phoneNumber, sessionPath);
         }));
+        
+        // Register MtProtoBackgroundService as a hosted service (like the working example)
+        services.AddSingleton<MtProtoBackgroundService>();
+        services.AddHostedService(sp => sp.GetRequiredService<MtProtoBackgroundService>());
 
         return services;
     }

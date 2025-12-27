@@ -982,36 +982,19 @@ public partial class TelegramUpdateHandler
             await _telegramBotService.SendMessageAsync(chatId, authMessage, cancellationToken);
             Console.WriteLine($"✅ Success message sent");
 
-            // Start authentication in background (fire and forget)
-            // Use Client.Login() method which is non-blocking
+            // Start authentication in background using Login() method
             _ = Task.Run(async () =>
             {
                 try
                 {
-                    // Wait a moment to ensure everything is initialized
-                    await Task.Delay(1000, cancellationToken);
+                    await Task.Delay(500, cancellationToken);
                     
-                    Console.WriteLine("🔄 Starting MTProto authentication with phone number...");
+                    Console.WriteLine("🔄 Starting authentication with LoginAsync(phone)...");
+                    var configNeeded = await _mtProtoService.LoginAsync(phone, cancellationToken);
+                    Console.WriteLine($"📋 Login returned: {configNeeded ?? "null (authenticated)"}");
                     
-                    // Use LoginAsync with phone number to start the authentication flow
-                    var result = await _mtProtoService.LoginAsync(phone, cancellationToken);
-                    
-                    if (result == null)
-                    {
-                        // Logged in successfully (shouldn't happen on first call with just phone number)
-                        var successMsg = "✅ MTProto authentication successful!\n\n" +
-                                       "The service is now ready to use.";
-                        await _telegramBotService.SendMessageAsync(chatId, successMsg, cancellationToken);
-                    }
-                    else if (result == "verification_code")
-                    {
-                        // Verification code needed - admin was already notified by the callback
-                        Console.WriteLine("ℹ️ Verification code requested, waiting for admin input via /auth_code");
-                    }
-                    else
-                    {
-                        Console.WriteLine($"ℹ️ Login step requires: {result}");
-                    }
+                    // configNeeded will be "verification_code", "password", or null if done
+                    // The callbacks already notify the user, so nothing more to do here
                 }
                 catch (Exception ex)
                 {

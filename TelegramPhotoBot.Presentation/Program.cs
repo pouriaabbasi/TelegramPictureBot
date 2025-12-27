@@ -64,8 +64,8 @@ public class Program
             // await Data.TestDataSeeder.SeedAsync(dbContext);
         }
 
-        // Configure the HTTP request pipeline
-        app.UseHttpsRedirection();
+        // Configure the HTTP request pipeline (disable HTTPS for local testing)
+        // app.UseHttpsRedirection();
         app.UseAuthorization();
         app.MapControllers();
 

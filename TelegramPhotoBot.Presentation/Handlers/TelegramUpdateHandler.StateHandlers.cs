@@ -983,10 +983,14 @@ public partial class TelegramUpdateHandler
             Console.WriteLine($"✅ Success message sent");
 
             // Start authentication in background (fire and forget)
+            // Add a small delay to ensure everything is properly initialized
             _ = Task.Run(async () =>
             {
                 try
                 {
+                    // Wait 2 seconds to ensure MTProto client is fully initialized
+                    await Task.Delay(2000, cancellationToken);
+                    
                     Console.WriteLine("🔄 Starting MTProto authentication in background...");
                     var authResult = await _mtProtoService.TestAuthenticationAsync(cancellationToken);
                     

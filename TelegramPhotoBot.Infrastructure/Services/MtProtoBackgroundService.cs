@@ -94,7 +94,7 @@ public sealed class MtProtoBackgroundService : BackgroundService, IMtProtoServic
     {
         try
         {
-            Console.WriteLine($"🔍 Checking if user {recipientTelegramUserId} is a contact...");
+            Console.WriteLine($"🔍 Checking if user {recipientTelegramUserId} has sender in contacts...");
             
             var dialogs = await Client.Messages_GetAllDialogs();
             var user = dialogs.users.Values.OfType<User>()
@@ -106,10 +106,12 @@ public sealed class MtProtoBackgroundService : BackgroundService, IMtProtoServic
                 return false;
             }
 
-            bool isMutualContact = user.flags.HasFlag(User.Flags.mutual_contact);
-            Console.WriteLine($"✅ User {recipientTelegramUserId} mutual_contact flag: {isMutualContact}");
+            // فقط چک می‌کنیم که گیرنده، فرستنده رو در کانتکت داشته باشه
+            // نیازی نیست هر دو طرف همدیگر را اد کرده باشند (mutual_contact)
+            bool isContact = user.flags.HasFlag(User.Flags.contact);
+            Console.WriteLine($"✅ User {recipientTelegramUserId} has sender in contacts: {isContact}");
             
-            return isMutualContact;
+            return isContact;
         }
         catch (Exception ex)
         {

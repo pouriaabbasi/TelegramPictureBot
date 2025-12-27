@@ -94,7 +94,7 @@ public sealed class MtProtoBackgroundService : BackgroundService, IMtProtoServic
     {
         try
         {
-            Console.WriteLine($"🔍 Checking if user {recipientTelegramUserId} has sender in contacts...");
+            Console.WriteLine($"🔍 Checking if user {recipientTelegramUserId} is in sender's contacts...");
             
             var dialogs = await Client.Messages_GetAllDialogs();
             var user = dialogs.users.Values.OfType<User>()
@@ -106,16 +106,69 @@ public sealed class MtProtoBackgroundService : BackgroundService, IMtProtoServic
                 return false;
             }
 
-            // فقط چک می‌کنیم که گیرنده، فرستنده رو در کانتکت داشته باشه
-            // نیازی نیست هر دو طرف همدیگر را اد کرده باشند (mutual_contact)
+            // لاگ کردن اطلاعات کامل user به صورت JSON
+            Console.WriteLine($"📊 User Details:");
+            Console.WriteLine($"  - ID: {user.id}");
+            Console.WriteLine($"  - Username: {user.username}");
+            Console.WriteLine($"  - First Name: {user.first_name}");
+            Console.WriteLine($"  - Last Name: {user.last_name}");
+            Console.WriteLine($"  - Phone: {user.phone}");
+            Console.WriteLine($"  - Access Hash: {user.access_hash}");
+            Console.WriteLine($"📊 Flag Checks:");
+            Console.WriteLine($"  - contact: {user.flags.HasFlag(User.Flags.contact)}");
+            Console.WriteLine($"  - mutual_contact: {user.flags.HasFlag(User.Flags.mutual_contact)}");
+
+            // اگر در کانتکت نیست، اضافه می‌کنیم
+            if (!user.flags.HasFlag(User.Flags.contact))
+            {
+                Console.WriteLine($"⚠️ User {recipientTelegramUserId} is not in contacts. Adding automatically...");
+                
+                try
+                {
+                    // اضافه کردن به کانتکت‌ها
+                    var inputUser = new InputUser(user.id, user.access_hash);
+                    var result = await Client.Contacts_AddContact(
+                        id: inputUser,
+                        first_name: user.first_name ?? "User",
+                        last_name: user.last_name ?? "",
+                        phone: user.phone ?? "",
+                        add_phone_privacy_exception: false
+                    );
+                    
+                    Console.WriteLine($"✅ Successfully added user {recipientTelegramUserId} to contacts!");
+                    
+                    // حالا باید دوباره user رو fetch کنیم تا flag جدید رو بگیریم
+                    var updatedDialogs = await Client.Messages_GetAllDialogs();
+                    var updatedUser = updatedDialogs.users.Values.OfType<User>()
+                        .FirstOrDefault(u => u.id == recipientTelegramUserId);
+                    
+                    if (updatedUser != null)
+                    {
+                        bool isNowContact = updatedUser.flags.HasFlag(User.Flags.contact);
+                        Console.WriteLine($"✅ Updated contact flag: {isNowContact}");
+                        return isNowContact;
+                    }
+                    
+                    return true; // فرض می‌کنیم موفق بوده
+                }
+                catch (Exception addEx)
+                {
+                    Console.WriteLine($"❌ Failed to add contact: {addEx.Message}");
+                    // اگر نتونستیم اضافه کنیم، false برمی‌گردونیم
+                    return false;
+                }
+            }
+            
+            // اگر از قبل در کانتکت بود
             bool isContact = user.flags.HasFlag(User.Flags.contact);
-            Console.WriteLine($"✅ User {recipientTelegramUserId} has sender in contacts: {isContact}");
+            Console.WriteLine($"✅ User {recipientTelegramUserId} is already in contacts: {isContact}");
             
             return isContact;
         }
         catch (Exception ex)
         {
             Console.WriteLine($"❌ Error checking contact: {ex.Message}");
+            Console.WriteLine($"❌ Stack trace: {ex.StackTrace}");
             throw;
         }
     }

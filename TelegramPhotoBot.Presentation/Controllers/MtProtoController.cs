@@ -136,6 +136,29 @@ public class MtProtoController : ControllerBase
         }
         switch (_mtProto.ConfigNeeded)
         {
+            case "ready":
+                // Not yet configured - show setup instructions
+                return Content(@"
+                    <html>
+                    <head>
+                        <meta charset='utf-8'>
+                        <title>MTProto Setup</title>
+                    </head>
+                    <body style='font-family: Arial; max-width: 600px; margin: 50px auto; padding: 20px;'>
+                        <h2>🔐 MTProto Setup Required</h2>
+                        <p>MTProto is not configured yet. Please enter your credentials:</p>
+                        <ul>
+                            <li>Get <strong>API ID</strong> and <strong>API Hash</strong> from <a href='https://my.telegram.org/apps' target='_blank'>my.telegram.org/apps</a></li>
+                            <li>You'll need your <strong>Phone Number</strong> (with country code)</li>
+                            <li>Keep your Telegram app ready for <strong>verification code</strong></li>
+                        </ul>
+                        <p style='margin-top: 30px;'>
+                            <a href='/mtproto/setup/start' style='padding: 10px 20px; background: #28a745; color: white; text-decoration: none; border-radius: 5px; font-size: 16px;'>🚀 Start Configuration</a>
+                        </p>
+                    </body>
+                    </html>
+                ", "text/html; charset=utf-8");
+            
             case "connecting":
                 return Content(@"
                     <html>
@@ -158,11 +181,23 @@ public class MtProtoController : ControllerBase
                     <head>
                         <meta charset='utf-8'>
                         <title>MTProto - Connected</title>
+                        <script>
+                            function confirmReset() {{
+                                if (confirm('⚠️ Warning!\n\nThis will:\n• Delete all MTProto credentials\n• Remove session file\n• Require full re-authentication\n\nAre you sure you want to continue?')) {{
+                                    window.location.href = 'reset';
+                                }}
+                            }}
+                        </script>
                     </head>
                     <body style='font-family: Arial; max-width: 600px; margin: 50px auto; padding: 20px;'>
                         <h2>✅ Connected as {_mtProto.User?.username ?? _mtProto.User?.first_name ?? "User"}</h2>
                         <p>MTProto authentication successful!</p>
-                        <p><a href='reset' style='color: #d9534f;'>Reset & Start Over</a></p>
+                        <p style='margin-top: 30px;'>
+                            <button onclick='confirmReset()' style='padding: 10px 20px; background: #d9534f; color: white; border: none; border-radius: 5px; cursor: pointer;'>🔄 Reset & Start Over</button>
+                        </p>
+                        <p style='font-size: 12px; color: #666; margin-top: 10px;'>
+                            <strong>Start Over:</strong> Clears all credentials and session data. Use this if you want to switch to a different Telegram account.
+                        </p>
                     </body>
                     </html>
                 ", "text/html; charset=utf-8");
@@ -173,10 +208,20 @@ public class MtProtoController : ControllerBase
                     <head>
                         <meta charset='utf-8'>
                         <title>MTProto - Error</title>
+                        <script>
+                            function confirmReset() {
+                                if (confirm('⚠️ This will delete all credentials and session data.\n\nContinue?')) {
+                                    window.location.href = 'reset';
+                                }
+                            }
+                        </script>
                     </head>
                     <body style='font-family: Arial; max-width: 600px; margin: 50px auto; padding: 20px;'>
                         <h2>❌ Connection Error</h2>
-                        <p>An error occurred. Please <a href='reset'>start over</a>.</p>
+                        <p>An error occurred during authentication.</p>
+                        <p style='margin-top: 20px;'>
+                            <button onclick='confirmReset()' style='padding: 10px 20px; background: #d9534f; color: white; border: none; border-radius: 5px; cursor: pointer;'>🔄 Reset & Try Again</button>
+                        </p>
                     </body>
                     </html>
                 ", "text/html; charset=utf-8");
@@ -186,28 +231,49 @@ public class MtProtoController : ControllerBase
                 {
                     "api_id" => "API ID (from my.telegram.org/apps)",
                     "api_hash" => "API Hash",
-                    "phone_number" => "Phone Number (e.g., +1234567890)",
+                    "phone_number" => "Phone Number (e.g., +989123456789)",
                     "verification_code" => "Verification Code (check your Telegram app)",
                     "password" => "2FA Password",
                     _ => _mtProto.ConfigNeeded
                 };
                 
                 var inputType = _mtProto.ConfigNeeded == "password" ? "password" : "text";
+                var placeholder = _mtProto.ConfigNeeded switch
+                {
+                    "api_id" => "12345678",
+                    "api_hash" => "0123456789abcdef0123456789abcdef",
+                    "phone_number" => "+989123456789",
+                    "verification_code" => "12345",
+                    "password" => "Your 2FA password",
+                    _ => ""
+                };
                 
                 return Content($@"
                     <html>
                     <head>
                         <meta charset='utf-8'>
                         <title>MTProto Setup</title>
+                        <script>
+                            function confirmReset() {{
+                                if (confirm('⚠️ This will delete all credentials and restart setup.\n\nContinue?')) {{
+                                    window.location.href = 'reset';
+                                }}
+                            }}
+                        </script>
                     </head>
                     <body style='font-family: Arial; max-width: 600px; margin: 50px auto; padding: 20px;'>
                         <h2>🔐 MTProto Setup</h2>
-                        <p>Enter {label}:</p>
-                        <form action='config' method='get'>
-                            <input name='value' type='{inputType}' autofocus required style='padding: 10px; width: 300px;'/>
-                            <button type='submit' style='padding: 10px 20px;'>Submit</button>
+                        <p><strong>Step: {label}</strong></p>
+                        <form action='config' method='get' style='margin-top: 20px;'>
+                            <input name='value' type='{inputType}' placeholder='{placeholder}' autofocus required style='padding: 10px; width: 100%; max-width: 400px; font-size: 14px; border: 2px solid #ddd; border-radius: 5px;'/>
+                            <br><br>
+                            <button type='submit' style='padding: 10px 30px; background: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 14px;'>Submit</button>
                         </form>
-                        <p><a href='reset' style='color: #d9534f;'>Start Over</a></p>
+                        <p style='margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;'>
+                            <button onclick='confirmReset()' style='padding: 8px 16px; background: transparent; color: #d9534f; border: 1px solid #d9534f; border-radius: 5px; cursor: pointer;'>🔄 Start Over</button>
+                            <br>
+                            <span style='font-size: 12px; color: #666;'>Clears all data and restarts setup</span>
+                        </p>
                     </body>
                     </html>
                 ", "text/html; charset=utf-8");
@@ -253,48 +319,92 @@ public class MtProtoController : ControllerBase
         }
     }
 
+    [HttpGet("setup/start")]
+    public async Task<ActionResult> SetupStart()
+    {
+        // Check session authentication
+        if (!IsAuthenticated())
+        {
+            return Redirect("/mtproto/status");
+        }
+        
+        // Set ConfigNeeded to api_id to start the wizard
+        var settingsRepo = HttpContext.RequestServices.GetRequiredService<Application.Interfaces.Repositories.IPlatformSettingsRepository>();
+        
+        // Check if already has settings
+        var existingApiId = await settingsRepo.GetValueAsync("telegram:mtproto:api_id", default);
+        if (!string.IsNullOrEmpty(existingApiId))
+        {
+            // Already configured, redirect to status
+            return Redirect("/mtproto/status");
+        }
+        
+        // Start fresh setup - ConfigNeeded should be set to api_id
+        _mtProto.ConfigNeeded = "api_id";
+        
+        return Redirect("/mtproto/status");
+    }
+
     [HttpGet("reset")]
     public async Task<ActionResult> Reset()
     {
+        // Check session authentication
+        if (!IsAuthenticated())
+        {
+            return Redirect("/mtproto/status");
+        }
+        
         try
         {
-            // This will require IPlatformSettingsRepository - let me add it
             var settingsRepo = HttpContext.RequestServices.GetRequiredService<Application.Interfaces.Repositories.IPlatformSettingsRepository>();
             
             // Clear all MTProto settings
             await settingsRepo.ClearMtProtoSettingsAsync(default);
             
             // Delete session file
-            var sessionPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Data", "mtproto_session.dat");
+            var sessionPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "WTelegram.session");
             if (System.IO.File.Exists(sessionPath))
             {
                 System.IO.File.Delete(sessionPath);
+                Console.WriteLine("🗑️ Deleted session file");
             }
+            
+            // Reset ConfigNeeded
+            _mtProto.ConfigNeeded = "api_id";
             
             return Content(@"
                 <html>
-                <head><title>MTProto - Reset</title></head>
+                <head>
+                    <meta charset='utf-8'>
+                    <title>MTProto - Reset Complete</title>
+                </head>
                 <body style='font-family: Arial; max-width: 600px; margin: 50px auto; padding: 20px;'>
-                    <h2>🔄 Settings Reset</h2>
-                    <p>All MTProto settings have been cleared.</p>
-                    <p><strong>Please restart the application</strong> for changes to take effect.</p>
-                    <p><a href='status'>Back to Status</a></p>
+                    <h2>✅ Reset Complete</h2>
+                    <p>All MTProto settings and session data have been cleared.</p>
+                    <p>You can now configure MTProto from scratch.</p>
+                    <p style='margin-top: 30px;'>
+                        <a href='/mtproto/status' style='padding: 10px 20px; background: #28a745; color: white; text-decoration: none; border-radius: 5px;'>Start Fresh Setup</a>
+                    </p>
                 </body>
                 </html>
-            ", "text/html");
+            ", "text/html; charset=utf-8");
         }
         catch (Exception ex)
         {
+            Console.WriteLine($"❌ Error resetting MTProto: {ex.Message}");
             return Content($@"
                 <html>
-                <head><title>MTProto - Error</title></head>
+                <head>
+                    <meta charset='utf-8'>
+                    <title>MTProto - Reset Error</title>
+                </head>
                 <body style='font-family: Arial; max-width: 600px; margin: 50px auto; padding: 20px;'>
                     <h2>❌ Reset Error</h2>
-                    <p style='color: red;'>{ex.Message}</p>
-                    <p><a href='status'>Back to Status</a></p>
+                    <p>An error occurred: {ex.Message}</p>
+                    <p><a href='/mtproto/status'>Back to Status</a></p>
                 </body>
                 </html>
-            ", "text/html");
+            ", "text/html; charset=utf-8");
         }
     }
 

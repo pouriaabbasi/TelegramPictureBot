@@ -19,7 +19,7 @@ public sealed class MtProtoBackgroundService : BackgroundService, IMtProtoServic
 
     public readonly WTelegram.Client Client;
     public User? User => Client.User;
-    public string? ConfigNeeded { get; private set; } = "connecting";
+    public string? ConfigNeeded { get; set; } = "connecting";
 
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<MtProtoBackgroundService> _logger;
@@ -42,6 +42,21 @@ public sealed class MtProtoBackgroundService : BackgroundService, IMtProtoServic
             using var scope = _serviceProvider.CreateScope();
             var settingsRepo = scope.ServiceProvider.GetRequiredService<IPlatformSettingsRepository>();
             var value = settingsRepo.GetValueAsync($"telegram:mtproto:{what}", default).Result;
+            
+            // If value is null/empty, provide a placeholder to allow Client construction
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                var placeholder = what switch
+                {
+                    "api_id" => "12345",
+                    "api_hash" => "0123456789abcdef0123456789abcdef", // Valid 32-char hex string
+                    "phone_number" => "+1234567890",
+                    _ => null
+                };
+                Console.WriteLine($"📋 Config callback (placeholder): {what} = {(what == "api_hash" ? "***" : placeholder ?? "null")}");
+                return placeholder;
+            }
+            
             Console.WriteLine($"📋 Config callback: {what} = {(what == "api_hash" ? "***" : value ?? "null")}");
             return value;
         });
@@ -57,8 +72,22 @@ public sealed class MtProtoBackgroundService : BackgroundService, IMtProtoServic
     {
         try
         {
-            Console.WriteLine("ℹ️ MTProto service initialized. Authentication will be performed on first request.");
-            ConfigNeeded = "ready"; // آماده برای درخواست
+            // Check if we have saved credentials
+            using var scope = _serviceProvider.CreateScope();
+            var settingsRepo = scope.ServiceProvider.GetRequiredService<IPlatformSettingsRepository>();
+            
+            var apiId = await settingsRepo.GetValueAsync("telegram:mtproto:api_id", stoppingToken);
+            
+            if (string.IsNullOrWhiteSpace(apiId))
+            {
+                Console.WriteLine("ℹ️ MTProto not configured. Set ConfigNeeded to 'ready' for web setup.");
+                ConfigNeeded = "ready";
+            }
+            else
+            {
+                Console.WriteLine("ℹ️ MTProto service initialized. Authentication will be performed on first request.");
+                ConfigNeeded = "ready"; // آماده برای درخواست
+            }
             
             // منتظر می‌مونیم تا برنامه خاتمه پیدا کنه
             await Task.Delay(Timeout.Infinite, stoppingToken);

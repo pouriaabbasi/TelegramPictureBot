@@ -219,34 +219,92 @@ public sealed class MtProtoBackgroundService : BackgroundService, IMtProtoServic
             {
                 Console.WriteLine($"✅ Using cached MTProto photo info (ID: {photoEntity.MtProtoPhotoId})");
                 
-                try
+                byte[] currentFileReference = photoEntity.MtProtoFileReference!;
+                
+                for (int attempt = 0; attempt < 2; attempt++)
                 {
-                    // استفاده از cached photo برای ارسال
-                    var inputPhoto = new InputPhoto
+                    try
                     {
-                        id = photoEntity.MtProtoPhotoId!.Value,
-                        access_hash = photoEntity.MtProtoAccessHash!.Value,
-                        file_reference = photoEntity.MtProtoFileReference!
-                    };
-                    
-                    var cachedMedia = new InputMediaPhoto
-                    {
-                        id = inputPhoto,
-                        flags = InputMediaPhoto.Flags.has_ttl_seconds,
-                        ttl_seconds = selfDestructSeconds
-                    };
+                        // استفاده از cached photo برای ارسال
+                        var inputPhoto = new InputPhoto
+                        {
+                            id = photoEntity.MtProtoPhotoId!.Value,
+                            access_hash = photoEntity.MtProtoAccessHash!.Value,
+                            file_reference = currentFileReference
+                        };
+                        
+                        var cachedMedia = new InputMediaPhoto
+                        {
+                            id = inputPhoto,
+                            flags = InputMediaPhoto.Flags.has_ttl_seconds,
+                            ttl_seconds = selfDestructSeconds
+                        };
 
-                    Console.WriteLine($"📤 Sending cached photo with {selfDestructSeconds}s timer...");
-                    await Client.Messages_SendMedia(user, cachedMedia, caption ?? "", DateTime.UtcNow.Ticks);
-                    
-                    Console.WriteLine($"✅ Photo sent successfully using cache!");
-                    return ContentDeliveryResult.Success();
-                }
-                catch (Exception cacheEx)
-                {
-                    Console.WriteLine($"⚠️ Failed to send cached photo: {cacheEx.Message}");
-                    Console.WriteLine($"⚠️ Will fall back to upload...");
-                    // ادامه میدیم به upload
+                        Console.WriteLine($"📤 Sending cached photo with {selfDestructSeconds}s timer... (attempt {attempt + 1})");
+                        var sendResult = await Client.Messages_SendMedia(user, cachedMedia, caption ?? "", DateTime.UtcNow.Ticks);
+                        
+                        // ذخیره message ID برای refresh های بعدی
+                        if (sendResult is Updates updatesResult)
+                        {
+                            var sentMsg = updatesResult.updates.OfType<UpdateNewMessage>()
+                                .Select(x => x.message)
+                                .OfType<Message>()
+                                .FirstOrDefault();
+                                
+                            if (sentMsg != null && sentMsg.media is MessageMediaPhoto mmp && mmp.photo is TL.Photo photo)
+                            {
+                                // Update file_reference و message ID
+                                photoEntity.SetMtProtoPhotoInfo(photo.ID, photo.access_hash, photo.file_reference, sentMsg.ID);
+                                Console.WriteLine($"💾 Updated file_reference and saved message ID: {sentMsg.ID}");
+                            }
+                        }
+                        
+                        Console.WriteLine($"✅ Photo sent successfully using cache!");
+                        return ContentDeliveryResult.Success();
+                    }
+                    catch (RpcException rpcEx) when (attempt == 0 && rpcEx.Code == 400 && rpcEx.Message.Contains("FILE_REFERENCE_"))
+                    {
+                        Console.WriteLine($"⚠️ File reference expired: {rpcEx.Message}");
+                        
+                        // سعی می‌کنیم file_reference جدید بگیریم
+                        if (photoEntity.MtProtoLastMessageId.HasValue)
+                        {
+                            try
+                            {
+                                Console.WriteLine($"🔄 Refreshing file_reference from message ID: {photoEntity.MtProtoLastMessageId}");
+                                
+                                var messages = await Client.Messages_GetMessages(new[] { new InputMessageID { id = photoEntity.MtProtoLastMessageId.Value } });
+                                
+                                if (messages.Messages.Length > 0 && messages.Messages[0] is Message msg)
+                                {
+                                    if (msg.media is MessageMediaPhoto mmp && mmp.photo is TL.Photo photo)
+                                    {
+                                        currentFileReference = photo.file_reference;
+                                        photoEntity.UpdateMtProtoFileReference(currentFileReference);
+                                        Console.WriteLine($"✅ File reference refreshed successfully!");
+                                        continue; // تلاش مجدد با file_reference جدید
+                                    }
+                                }
+                                
+                                Console.WriteLine($"⚠️ Could not extract photo from message, falling back to upload...");
+                            }
+                            catch (Exception refreshEx)
+                            {
+                                Console.WriteLine($"⚠️ Failed to refresh file_reference: {refreshEx.Message}");
+                            }
+                        }
+                        else
+                        {
+                            Console.WriteLine($"⚠️ No message ID available for refresh, falling back to upload...");
+                        }
+                        
+                        break; // خارج شدن از loop و رفتن به upload
+                    }
+                    catch (Exception cacheEx)
+                    {
+                        Console.WriteLine($"⚠️ Failed to send cached photo: {cacheEx.Message}");
+                        break; // خارج شدن از loop و رفتن به upload
+                    }
                 }
             }
 
@@ -319,8 +377,8 @@ public sealed class MtProtoBackgroundService : BackgroundService, IMtProtoServic
                     
                 if (sentMsg?.media is MessageMediaPhoto mmp && mmp.photo is TL.Photo photo)
                 {
-                    Console.WriteLine($"💾 Caching MTProto photo info (ID: {photo.ID})");
-                    photoEntity.SetMtProtoPhotoInfo(photo.ID, photo.access_hash, photo.file_reference);
+                    Console.WriteLine($"💾 Caching MTProto photo info (ID: {photo.ID}, MessageID: {sentMsg.ID})");
+                    photoEntity.SetMtProtoPhotoInfo(photo.ID, photo.access_hash, photo.file_reference, sentMsg.ID);
                 }
             }
 

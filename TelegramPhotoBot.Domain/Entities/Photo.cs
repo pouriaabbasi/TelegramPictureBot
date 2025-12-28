@@ -23,6 +23,7 @@ public class Photo : AggregateRoot
     public long? MtProtoPhotoId { get; private set; }
     public long? MtProtoAccessHash { get; private set; }
     public byte[]? MtProtoFileReference { get; private set; }
+    public int? MtProtoLastMessageId { get; private set; } // برای refresh کردن file_reference
     
     // Navigation properties
     public virtual User Seller { get; private set; } = null!;
@@ -104,10 +105,20 @@ public class Photo : AggregateRoot
         return Type == PhotoType.Premium;
     }
     
-    public void SetMtProtoPhotoInfo(long photoId, long accessHash, byte[] fileReference)
+    public void SetMtProtoPhotoInfo(long photoId, long accessHash, byte[] fileReference, int? messageId = null)
     {
         MtProtoPhotoId = photoId;
         MtProtoAccessHash = accessHash;
+        MtProtoFileReference = fileReference;
+        if (messageId.HasValue)
+        {
+            MtProtoLastMessageId = messageId.Value;
+        }
+        MarkAsUpdated();
+    }
+    
+    public void UpdateMtProtoFileReference(byte[] fileReference)
+    {
         MtProtoFileReference = fileReference;
         MarkAsUpdated();
     }

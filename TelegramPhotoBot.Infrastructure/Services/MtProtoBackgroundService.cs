@@ -133,15 +133,20 @@ public sealed class MtProtoBackgroundService : BackgroundService, IMtProtoServic
                 try
                 {
                     var inputUser = new InputUser(user.id, user.access_hash);
+                    
+                    // اضافه کردن با یک label خاص برای تشخیص راحت‌تر
+                    var firstName = $"🤖 {user.first_name ?? "Customer"}";
+                    var lastName = "[Bot Customer]";
+                    
                     var result = await Client.Contacts_AddContact(
                         id: inputUser,
-                        first_name: user.first_name ?? "User",
-                        last_name: user.last_name ?? "",
+                        first_name: firstName,
+                        last_name: lastName,
                         phone: user.phone ?? "",
                         add_phone_privacy_exception: false
                     );
                     
-                    Console.WriteLine($"✅ Successfully added user {recipientTelegramUserId} to sender's contacts!");
+                    Console.WriteLine($"✅ Successfully added user {recipientTelegramUserId} to sender's contacts with label");
                     
                     // دوباره fetch می‌کنیم
                     var updatedDialogs = await Client.Messages_GetAllDialogs();

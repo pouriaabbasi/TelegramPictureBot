@@ -14,6 +14,9 @@ namespace TelegramPhotoBot.Infrastructure.Services;
 /// </summary>
 public sealed class MtProtoBackgroundService : BackgroundService, IMtProtoService
 {
+    private readonly SemaphoreSlim _authLock = new SemaphoreSlim(1, 1);
+    private bool _isAuthenticated = false;
+
     public readonly WTelegram.Client Client;
     public User? User => Client.User;
     public string? ConfigNeeded { get; private set; } = "connecting";
@@ -54,24 +57,19 @@ public sealed class MtProtoBackgroundService : BackgroundService, IMtProtoServic
     {
         try
         {
-            using var scope = _serviceProvider.CreateScope();
-            var settingsRepo = scope.ServiceProvider.GetRequiredService<IPlatformSettingsRepository>();
+            Console.WriteLine("ℹ️ MTProto service initialized. Authentication will be performed on first request.");
+            ConfigNeeded = "ready"; // آماده برای درخواست
             
-            var phoneNumber = await settingsRepo.GetValueAsync("telegram:mtproto:phone_number", stoppingToken);
-            if (!string.IsNullOrWhiteSpace(phoneNumber))
-            {
-                Console.WriteLine($"🔐 Starting login with phone: {phoneNumber}");
-                ConfigNeeded = await DoLogin(phoneNumber);
-            }
-            else
-            {
-                Console.WriteLine("⚠️ No phone number configured. Waiting for web setup...");
-                ConfigNeeded = "api_id"; // Start from the beginning
-            }
+            // منتظر می‌مونیم تا برنامه خاتمه پیدا کنه
+            await Task.Delay(Timeout.Infinite, stoppingToken);
+        }
+        catch (OperationCanceledException)
+        {
+            Console.WriteLine("ℹ️ MTProto service is shutting down.");
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error during MTProto initialization");
+            _logger.LogError(ex, "Error in MTProto background service");
             ConfigNeeded = "error";
         }
     }
@@ -100,10 +98,56 @@ public sealed class MtProtoBackgroundService : BackgroundService, IMtProtoServic
         return await DoLogin(loginInfo);
     }
 
+    public async Task EnsureAuthenticatedAsync(CancellationToken cancellationToken = default)
+    {
+        if (_isAuthenticated && Client.User != null)
+        {
+            return; // Already authenticated
+        }
+
+        await _authLock.WaitAsync(cancellationToken);
+        try
+        {
+            if (_isAuthenticated && Client.User != null)
+            {
+                return; // Double-check after acquiring lock
+            }
+
+            Console.WriteLine("🔐 Starting lazy authentication...");
+            
+            using var scope = _serviceProvider.CreateScope();
+            var settingsRepo = scope.ServiceProvider.GetRequiredService<IPlatformSettingsRepository>();
+            
+            var phoneNumber = await settingsRepo.GetValueAsync("telegram:mtproto:phone_number", cancellationToken);
+            if (!string.IsNullOrWhiteSpace(phoneNumber))
+            {
+                Console.WriteLine($"🔐 Logging in with phone: {phoneNumber}");
+                ConfigNeeded = await DoLogin(phoneNumber);
+                
+                if (Client.User != null)
+                {
+                    _isAuthenticated = true;
+                    Console.WriteLine($"✅ Authentication successful! Logged in as: {Client.User.first_name}");
+                }
+            }
+            else
+            {
+                Console.WriteLine("⚠️ No phone number configured.");
+                ConfigNeeded = "api_id";
+            }
+        }
+        finally
+        {
+            _authLock.Release();
+        }
+    }
+
     public async Task<bool> IsContactAsync(long recipientTelegramUserId, CancellationToken cancellationToken = default)
     {
         try
         {
+            await EnsureAuthenticatedAsync(cancellationToken);
+            
             Console.WriteLine($"🔍 Checking contact status for user {recipientTelegramUserId}...");
             
             var dialogs = await Client.Messages_GetAllDialogs();
@@ -206,6 +250,8 @@ public sealed class MtProtoBackgroundService : BackgroundService, IMtProtoServic
         
         try
         {
+            await EnsureAuthenticatedAsync(cancellationToken);
+            
             Console.WriteLine($"📤 SendPhotoWithTimerAsync: user={recipientTelegramUserId}, file={filePath}, timer={selfDestructSeconds}s");
 
             // Get user from dialogs

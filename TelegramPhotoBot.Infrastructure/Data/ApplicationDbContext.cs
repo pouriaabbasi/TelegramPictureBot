@@ -26,6 +26,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<UserState> UserStates => Set<UserState>();
     public DbSet<ViewHistory> ViewHistories => Set<ViewHistory>();
     public DbSet<PlatformSettings> PlatformSettings => Set<PlatformSettings>();
+    public DbSet<MtProtoAccessToken> MtProtoAccessTokens => Set<MtProtoAccessToken>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

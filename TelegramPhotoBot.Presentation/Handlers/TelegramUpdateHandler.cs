@@ -36,6 +36,7 @@ public partial class TelegramUpdateHandler
     private readonly IViewHistoryRepository _viewHistoryRepository;
     private readonly IPlatformSettingsRepository _platformSettingsRepository;
     private readonly IMtProtoService _mtProtoService;
+    private readonly IMtProtoAccessTokenService _mtProtoAccessTokenService;
 
     public TelegramUpdateHandler(
         IUserService userService,
@@ -59,7 +60,8 @@ public partial class TelegramUpdateHandler
         IDemoAccessRepository demoAccessRepository,
         IViewHistoryRepository viewHistoryRepository,
         IPlatformSettingsRepository platformSettingsRepository,
-        IMtProtoService mtProtoService)
+        IMtProtoService mtProtoService,
+        IMtProtoAccessTokenService mtProtoAccessTokenService)
     {
         _userService = userService ?? throw new ArgumentNullException(nameof(userService));
         _contentAuthorizationService = contentAuthorizationService ?? throw new ArgumentNullException(nameof(contentAuthorizationService));
@@ -83,6 +85,7 @@ public partial class TelegramUpdateHandler
         _viewHistoryRepository = viewHistoryRepository ?? throw new ArgumentNullException(nameof(viewHistoryRepository));
         _platformSettingsRepository = platformSettingsRepository ?? throw new ArgumentNullException(nameof(platformSettingsRepository));
         _mtProtoService = mtProtoService ?? throw new ArgumentNullException(nameof(mtProtoService));
+        _mtProtoAccessTokenService = mtProtoAccessTokenService ?? throw new ArgumentNullException(nameof(mtProtoAccessTokenService));
     }
 
     /// <summary>
@@ -448,6 +451,14 @@ public partial class TelegramUpdateHandler
         }
 
         if (parts.Length < 3) return;
+        
+        // Handle MTProto web setup
+        if (action == "mtproto" && parts.Length >= 3 && parts[1] == "web" && parts[2] == "setup")
+        {
+            await HandleMtProtoWebSetupAsync(user.Id, chatId, cancellationToken);
+            return;
+        }
+        
         var secondPart = parts[1];
         var thirdPart = parts[2];
 
@@ -1720,6 +1731,46 @@ public partial class TelegramUpdateHandler
                 cancellationToken);
         }
     }
+    
+    /// <summary>
+    /// Handles MTProto web setup - generates one-time token and sends secure link
+    /// </summary>
+    private async Task HandleMtProtoWebSetupAsync(Guid userId, long chatId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var isAdmin = await _authorizationService.IsAdminAsync(userId, cancellationToken);
+            if (!isAdmin)
+            {
+                await _telegramBotService.SendMessageAsync(chatId, "❌ Only admins can configure MTProto.", cancellationToken);
+                return;
+            }
+
+            // Generate one-time access token
+            var tokenString = await _mtProtoAccessTokenService.GenerateTokenAsync(userId, cancellationToken);
+            
+            // Get server URL from configuration
+            var serverUrl = _configuration["ServerUrl"] ?? "http://localhost:5000";
+            var setupUrl = $"{serverUrl}/mtproto/auth?token={tokenString}";
+            
+            var message = "🔐 MTProto Web Setup\n\n" +
+                         "یک لینک امن برای شما ساخته شد:\n\n" +
+                         $"🔗 {setupUrl}\n\n" +
+                         "⏱️ این لینک فقط 5 دقیقه اعتبار دارد\n" +
+                         "🔒 فقط یکبار قابل استفاده است\n" +
+                         "🌐 بعد از کلیک، session شما ذخیره می‌شود\n\n" +
+                         "⚠️ این لینک را با کسی به اشتراک نگذارید!";
+            
+            await _telegramBotService.SendMessageAsync(chatId, message, cancellationToken);
+            
+            Console.WriteLine($"✅ Generated MTProto web setup link for admin {userId}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Error in HandleMtProtoWebSetupAsync: {ex.Message}");
+            await _telegramBotService.SendMessageAsync(chatId, $"❌ خطا در ساخت لینک: {ex.Message}", cancellationToken);
+        }
+    }
 
     #region Marketplace Commands
 
@@ -2573,7 +2624,10 @@ public partial class TelegramUpdateHandler
             {
                 Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
                     "🔧 Setup MTProto (Wizard)",
-                    "mtproto_setup_start")
+                    "mtproto_setup_start"),
+                Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
+                    "🌐 Web Setup",
+                    "mtproto_web_setup")
             });
 
             // MTProto Settings (Individual)

@@ -41,6 +41,16 @@ public class Program
         builder.Services.AddInfrastructureServices(builder.Configuration);
         builder.Services.AddPresentationServices();
 
+        // Add session support for MTProto auth
+        builder.Services.AddDistributedMemoryCache();
+        builder.Services.AddSession(options =>
+        {
+            options.IdleTimeout = TimeSpan.FromHours(1);
+            options.Cookie.HttpOnly = true;
+            options.Cookie.IsEssential = true;
+            options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+        });
+
         // Add controllers if using webhooks
         builder.Services.AddControllers();
 
@@ -66,6 +76,7 @@ public class Program
 
         // Configure the HTTP request pipeline (disable HTTPS for local testing)
         // app.UseHttpsRedirection();
+        app.UseSession(); // Enable session middleware
         app.UseAuthorization();
         app.MapControllers();
 

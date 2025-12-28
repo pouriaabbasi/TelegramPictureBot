@@ -20,6 +20,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IContentDeliveryService, ContentDeliveryService>();
         services.AddScoped<ISubscriptionService, SubscriptionService>();
         services.AddScoped<IPhotoPurchaseService, PhotoPurchaseService>();
+        services.AddScoped<IMtProtoAccessTokenService, MtProtoAccessTokenService>();
         services.AddScoped<IUserService, UserService>();
 
         // Marketplace Services

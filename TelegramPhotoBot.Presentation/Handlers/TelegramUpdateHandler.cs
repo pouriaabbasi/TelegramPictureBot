@@ -1149,17 +1149,36 @@ public partial class TelegramUpdateHandler
             if (!deliveryResult.IsSuccess)
             {
                 Console.WriteLine($"❌ Failed to send photo to chat {chatId}: {deliveryResult.ErrorMessage}");
-                await _telegramBotService.SendMessageAsync(
-                    chatId,
-                    deliveryResult.ErrorMessage ?? "❌ Failed to send photo. Please try again later.",
-                    cancellationToken);
+                
+                // اگر به خاطر مشکل contact بود، contact card هم بفرست
+                if (deliveryResult.ErrorMessage?.Contains("کانتکت") == true || 
+                    deliveryResult.ErrorMessage?.Contains("contact") == true)
+                {
+                    await _telegramBotService.SendMessageAsync(
+                        chatId,
+                        "📱 برای دریافت محتوای پرمیوم، لطفاً ابتدا حساب فرستنده را به کانتکت‌های خود اضافه کنید:\n\n" +
+                        "1️⃣ روی کارت زیر کلیک کنید\n" +
+                        "2️⃣ گزینه 'Add to Contacts' را انتخاب کنید\n" +
+                        "3️⃣ سپس دوباره دکمه 'View' را بزنید",
+                        cancellationToken);
+                    
+                    // ارسال contact card
+                    await SendSenderContactAsync(chatId, cancellationToken);
+                }
+                else
+                {
+                    await _telegramBotService.SendMessageAsync(
+                        chatId,
+                        deliveryResult.ErrorMessage ?? "❌ Failed to send photo. Please try again later.",
+                        cancellationToken);
+                }
             }
             else
             {
                 Console.WriteLine($"✅ Photo sent successfully to chat {chatId} with self-destruct timer");
                 await _telegramBotService.SendMessageAsync(
                     chatId,
-                    "✅ Photo sent successfully with self-destruct timer!",
+                    "✅ عکس با موفقیت ارسال شد! این عکس پس از مشاهده خودکار حذف می‌شود.",
                     cancellationToken);
             }
         }
@@ -1673,12 +1692,13 @@ public partial class TelegramUpdateHandler
     {
         try
         {
-            var senderPhoneNumber = _configuration["Telegram:MtProto:PhoneNumber"];
+            // Read phone number from database
+            var senderPhoneNumber = await _platformSettingsRepository.GetValueAsync("telegram:mtproto:phone_number", cancellationToken);
             if (string.IsNullOrEmpty(senderPhoneNumber))
             {
                 await _telegramBotService.SendMessageAsync(
                     chatId,
-                    " Sender account configuration is missing.",
+                    "❌ Sender account configuration is missing.",
                     cancellationToken);
                 return;
             }
@@ -1696,7 +1716,7 @@ public partial class TelegramUpdateHandler
         {
             await _telegramBotService.SendMessageAsync(
                 chatId,
-                $"Error sending contact: {ex.Message}",
+                $"❌ Error sending contact: {ex.Message}",
                 cancellationToken);
         }
     }

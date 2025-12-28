@@ -62,6 +62,15 @@ public sealed class MtProtoBackgroundService : IMtProtoService, IDisposable
             
             _client = new WTelegram.Client(what =>
             {
+                // Handle session_pathname separately - use the correct path
+                if (what == "session_pathname")
+                {
+                    var sessionPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Data", "mtproto_session.dat");
+                    Directory.CreateDirectory(Path.GetDirectoryName(sessionPath)!);
+                    Console.WriteLine($"📁 Config callback returning session_pathname: {sessionPath}");
+                    return sessionPath;
+                }
+                
                 // Synchronous config callback - must use .Result like the working example
                 using var scope = _serviceProvider.CreateScope();
                 var settingsRepo = scope.ServiceProvider.GetRequiredService<IPlatformSettingsRepository>();

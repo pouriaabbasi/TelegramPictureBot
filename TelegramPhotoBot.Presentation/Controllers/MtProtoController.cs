@@ -377,12 +377,20 @@ public class MtProtoController : ControllerBase
             await settingsRepo.SetValueAsync("telegram:mtproto:api_hash", null, default);
             await settingsRepo.SetValueAsync("telegram:mtproto:phone_number", null, default);
             
-            // Delete session file
-            var sessionFile = "WTelegram.session";
-            if (System.IO.File.Exists(sessionFile))
+            // Delete session file (use the same path as the service)
+            var sessionPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Data", "mtproto_session.dat");
+            if (System.IO.File.Exists(sessionPath))
             {
-                System.IO.File.Delete(sessionFile);
-                Console.WriteLine("✅ Session file deleted");
+                System.IO.File.Delete(sessionPath);
+                Console.WriteLine($"✅ Session file deleted: {sessionPath}");
+            }
+            
+            // Also check for old WTelegram.session in base directory (for backward compatibility)
+            var oldSessionFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "WTelegram.session");
+            if (System.IO.File.Exists(oldSessionFile))
+            {
+                System.IO.File.Delete(oldSessionFile);
+                Console.WriteLine($"✅ Old session file deleted: {oldSessionFile}");
             }
             
             _mtProto.ConfigNeeded = "api_id";

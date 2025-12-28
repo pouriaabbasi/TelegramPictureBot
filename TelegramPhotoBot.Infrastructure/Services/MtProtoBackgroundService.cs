@@ -1,4 +1,3 @@
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.DependencyInjection;
 using TelegramPhotoBot.Application.Interfaces;
@@ -10,16 +9,18 @@ using Telegram.Bot;
 namespace TelegramPhotoBot.Infrastructure.Services;
 
 /// <summary>
-/// Background service for MTProto client (matching WTelegramClient working example)
+/// MTProto service with lazy initialization - only creates client when first needed
 /// </summary>
-public sealed class MtProtoBackgroundService : BackgroundService, IMtProtoService
+public sealed class MtProtoBackgroundService : IMtProtoService, IDisposable
 {
     private readonly SemaphoreSlim _authLock = new SemaphoreSlim(1, 1);
+    private readonly SemaphoreSlim _initLock = new SemaphoreSlim(1, 1);
     private bool _isAuthenticated = false;
+    private bool _isInitialized = false;
 
-    public readonly WTelegram.Client Client;
-    public User? User => Client.User;
-    public string? ConfigNeeded { get; set; } = "connecting";
+    private WTelegram.Client? _client;
+    public User? User => _client?.User;
+    public string? ConfigNeeded { get; set; } = "ready";
 
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<MtProtoBackgroundService> _logger;
@@ -36,81 +37,107 @@ public sealed class MtProtoBackgroundService : BackgroundService, IMtProtoServic
         
         WTelegram.Helpers.Log = (lvl, msg) => _logger.Log((LogLevel)lvl, msg);
         
-        Client = new WTelegram.Client(what =>
+        Console.WriteLine("ℹ️ MTProto service created. Client will be initialized on first use.");
+    }
+    
+    /// <summary>
+    /// Ensures WTelegram.Client is initialized. Safe to call multiple times.
+    /// </summary>
+    public async Task EnsureInitializedAsync(CancellationToken cancellationToken = default)
+    {
+        if (_isInitialized && _client != null)
         {
-            // Synchronous config callback - must use .Result like the working example
-            using var scope = _serviceProvider.CreateScope();
-            var settingsRepo = scope.ServiceProvider.GetRequiredService<IPlatformSettingsRepository>();
-            var value = settingsRepo.GetValueAsync($"telegram:mtproto:{what}", default).Result;
-            
-            // If value is null/empty, provide a placeholder to allow Client construction
-            if (string.IsNullOrWhiteSpace(value))
-            {
-                var placeholder = what switch
-                {
-                    "api_id" => "12345",
-                    "api_hash" => "0123456789abcdef0123456789abcdef", // Valid 32-char hex string
-                    "phone_number" => "+1234567890",
-                    _ => null
-                };
-                Console.WriteLine($"📋 Config callback (placeholder): {what} = {(what == "api_hash" ? "***" : placeholder ?? "null")}");
-                return placeholder;
-            }
-            
-            Console.WriteLine($"📋 Config callback: {what} = {(what == "api_hash" ? "***" : value ?? "null")}");
-            return value;
-        });
-    }
+            return; // Already initialized
+        }
 
-    public override void Dispose()
-    {
-        Client.Dispose();
-        base.Dispose();
-    }
-
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-    {
+        await _initLock.WaitAsync(cancellationToken);
         try
         {
-            // Check if we have saved credentials
-            using var scope = _serviceProvider.CreateScope();
-            var settingsRepo = scope.ServiceProvider.GetRequiredService<IPlatformSettingsRepository>();
-            
-            var apiId = await settingsRepo.GetValueAsync("telegram:mtproto:api_id", stoppingToken);
-            
-            if (string.IsNullOrWhiteSpace(apiId))
+            if (_isInitialized && _client != null)
             {
-                Console.WriteLine("ℹ️ MTProto not configured. Set ConfigNeeded to 'ready' for web setup.");
-                ConfigNeeded = "ready";
+                return; // Double-check after acquiring lock
+            }
+
+            Console.WriteLine("🔧 Initializing WTelegram.Client...");
+            
+            _client = new WTelegram.Client(what =>
+            {
+                // Synchronous config callback - must use .Result like the working example
+                using var scope = _serviceProvider.CreateScope();
+                var settingsRepo = scope.ServiceProvider.GetRequiredService<IPlatformSettingsRepository>();
+                
+                Console.WriteLine($"🔍 Config callback requesting: {what}");
+                var value = settingsRepo.GetValueAsync($"telegram:mtproto:{what}", default).Result;
+                Console.WriteLine($"📦 Config callback fetched from DB: {what} = {(value == null ? "NULL" : (what == "api_hash" ? "***" : value))}");
+                
+                // If value is null/empty, provide a placeholder to allow Client construction
+                if (string.IsNullOrWhiteSpace(value))
+                {
+                    var placeholder = what switch
+                    {
+                        "api_id" => "12345",
+                        "api_hash" => "0123456789abcdef0123456789abcdef", // Valid 32-char hex string
+                        "phone_number" => "+1234567890",
+                        _ => null
+                    };
+                    Console.WriteLine($"⚠️ Config callback returning PLACEHOLDER: {what} = {(what == "api_hash" ? "***" : placeholder ?? "null")}");
+                    return placeholder;
+                }
+                
+                Console.WriteLine($"✅ Config callback returning REAL value: {what}");
+                return value;
+            });
+            
+            _isInitialized = true;
+            Console.WriteLine("✅ WTelegram.Client initialized successfully");
+            
+            // Check authentication status
+            if (_client.User != null)
+            {
+                _isAuthenticated = true;
+                ConfigNeeded = "authenticated";
+                Console.WriteLine($"✅ Already authenticated as: {_client.User.first_name}");
             }
             else
             {
-                Console.WriteLine("ℹ️ MTProto service initialized. Authentication will be performed on first request.");
-                ConfigNeeded = "ready"; // آماده برای درخواست
+                Console.WriteLine("ℹ️ Client initialized but not authenticated yet");
             }
-            
-            // منتظر می‌مونیم تا برنامه خاتمه پیدا کنه
-            await Task.Delay(Timeout.Infinite, stoppingToken);
-        }
-        catch (OperationCanceledException)
-        {
-            Console.WriteLine("ℹ️ MTProto service is shutting down.");
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in MTProto background service");
+            _logger.LogError(ex, "Failed to initialize WTelegram.Client");
             ConfigNeeded = "error";
+            throw;
         }
+        finally
+        {
+            _initLock.Release();
+        }
+    }
+
+    public void Dispose()
+    {
+        _client?.Dispose();
+        _authLock?.Dispose();
+        _initLock?.Dispose();
     }
 
     public async Task<string?> DoLogin(string loginInfo)
     {
         try
         {
+            await EnsureInitializedAsync(); // ← Ensure initialized
+            
             Console.WriteLine($"🔐 DoLogin called with: {loginInfo}");
-            var result = await Client.Login(loginInfo);
+            var result = await _client!.Login(loginInfo);
             ConfigNeeded = result ?? "authenticated";
             Console.WriteLine($"✅ Login result: {ConfigNeeded}");
+            
+            if (_client.User != null)
+            {
+                _isAuthenticated = true;
+            }
+            
             return result;
         }
         catch (Exception ex)
@@ -129,7 +156,9 @@ public sealed class MtProtoBackgroundService : BackgroundService, IMtProtoServic
 
     public async Task EnsureAuthenticatedAsync(CancellationToken cancellationToken = default)
     {
-        if (_isAuthenticated && Client.User != null)
+        await EnsureInitializedAsync(cancellationToken); // ← Ensure initialized first
+        
+        if (_isAuthenticated && _client?.User != null)
         {
             return; // Already authenticated
         }
@@ -137,7 +166,7 @@ public sealed class MtProtoBackgroundService : BackgroundService, IMtProtoServic
         await _authLock.WaitAsync(cancellationToken);
         try
         {
-            if (_isAuthenticated && Client.User != null)
+            if (_isAuthenticated && _client?.User != null)
             {
                 return; // Double-check after acquiring lock
             }
@@ -153,10 +182,10 @@ public sealed class MtProtoBackgroundService : BackgroundService, IMtProtoServic
                 Console.WriteLine($"🔐 Logging in with phone: {phoneNumber}");
                 ConfigNeeded = await DoLogin(phoneNumber);
                 
-                if (Client.User != null)
+                if (_client?.User != null)
                 {
                     _isAuthenticated = true;
-                    Console.WriteLine($"✅ Authentication successful! Logged in as: {Client.User.first_name}");
+                    Console.WriteLine($"✅ Authentication successful! Logged in as: {_client.User.first_name}");
                 }
             }
             else
@@ -175,11 +204,11 @@ public sealed class MtProtoBackgroundService : BackgroundService, IMtProtoServic
     {
         try
         {
-            await EnsureAuthenticatedAsync(cancellationToken);
+            await EnsureAuthenticatedAsync(cancellationToken); // ← Ensure authenticated
             
             Console.WriteLine($"🔍 Checking contact status for user {recipientTelegramUserId}...");
             
-            var dialogs = await Client.Messages_GetAllDialogs();
+            var dialogs = await _client!.Messages_GetAllDialogs();
             var user = dialogs.users.Values.OfType<User>()
                 .FirstOrDefault(u => u.id == recipientTelegramUserId);
 
@@ -211,7 +240,7 @@ public sealed class MtProtoBackgroundService : BackgroundService, IMtProtoServic
                     var firstName = $"🤖 {user.first_name ?? "Customer"}";
                     var lastName = "[Bot Customer]";
                     
-                    var result = await Client.Contacts_AddContact(
+                    var result = await _client!.Contacts_AddContact(
                         id: inputUser,
                         first_name: firstName,
                         last_name: lastName,
@@ -222,7 +251,7 @@ public sealed class MtProtoBackgroundService : BackgroundService, IMtProtoServic
                     Console.WriteLine($"✅ Successfully added user {recipientTelegramUserId} to sender's contacts with label");
                     
                     // دوباره fetch می‌کنیم
-                    var updatedDialogs = await Client.Messages_GetAllDialogs();
+                    var updatedDialogs = await _client!.Messages_GetAllDialogs();
                     user = updatedDialogs.users.Values.OfType<User>()
                         .FirstOrDefault(u => u.id == recipientTelegramUserId);
                     
@@ -284,7 +313,7 @@ public sealed class MtProtoBackgroundService : BackgroundService, IMtProtoServic
             Console.WriteLine($"📤 SendPhotoWithTimerAsync: user={recipientTelegramUserId}, file={filePath}, timer={selfDestructSeconds}s");
 
             // Get user from dialogs
-            var dialogs = await Client.Messages_GetAllDialogs();
+            var dialogs = await _client!.Messages_GetAllDialogs();
             var user = dialogs.users.Values.OfType<User>()
                 .FirstOrDefault(u => u.id == recipientTelegramUserId);
 
@@ -321,7 +350,7 @@ public sealed class MtProtoBackgroundService : BackgroundService, IMtProtoServic
                         };
 
                         Console.WriteLine($"📤 Sending cached photo with {selfDestructSeconds}s timer... (attempt {attempt + 1})");
-                        var sendResult = await Client.Messages_SendMedia(user, cachedMedia, caption ?? "", DateTime.UtcNow.Ticks);
+                        var sendResult = await _client!.Messages_SendMedia(user, cachedMedia, caption ?? "", DateTime.UtcNow.Ticks);
                         
                         // ذخیره message ID برای refresh های بعدی
                         if (sendResult is Updates updatesResult)
@@ -353,7 +382,7 @@ public sealed class MtProtoBackgroundService : BackgroundService, IMtProtoServic
                             {
                                 Console.WriteLine($"🔄 Refreshing file_reference from message ID: {photoEntity.MtProtoLastMessageId}");
                                 
-                                var messages = await Client.Messages_GetMessages(new[] { new InputMessageID { id = photoEntity.MtProtoLastMessageId.Value } });
+                                var messages = await _client!.Messages_GetMessages(new[] { new InputMessageID { id = photoEntity.MtProtoLastMessageId.Value } });
                                 
                                 if (messages.Messages.Length > 0 && messages.Messages[0] is Message msg)
                                 {
@@ -433,7 +462,7 @@ public sealed class MtProtoBackgroundService : BackgroundService, IMtProtoServic
 
             // Upload file به MTProto
             Console.WriteLine($"📤 Uploading file to MTProto: {fileToUpload}");
-            var inputFile = await Client.UploadFileAsync(fileToUpload, null);
+            var inputFile = await _client!.UploadFileAsync(fileToUpload, null);
             
             // Create media with TTL
             var media = new InputMediaUploadedPhoto
@@ -445,7 +474,7 @@ public sealed class MtProtoBackgroundService : BackgroundService, IMtProtoServic
 
             // Send media
             Console.WriteLine($"📤 Sending uploaded photo with {selfDestructSeconds}s timer...");
-            var result = await Client.Messages_SendMedia(user, media, caption ?? "", DateTime.UtcNow.Ticks);
+            var result = await _client!.Messages_SendMedia(user, media, caption ?? "", DateTime.UtcNow.Ticks);
 
             // Extract photo info from result for caching
             if (photoEntity != null && result is Updates updates)
@@ -498,9 +527,11 @@ public sealed class MtProtoBackgroundService : BackgroundService, IMtProtoServic
     {
         try
         {
+            await EnsureAuthenticatedAsync(cancellationToken); // ← Ensure authenticated
+            
             Console.WriteLine($"📤 SendVideoWithTimerAsync: user={recipientTelegramUserId}, file={filePath}, timer={selfDestructSeconds}s");
 
-            var dialogs = await Client.Messages_GetAllDialogs();
+            var dialogs = await _client!.Messages_GetAllDialogs();
             var user = dialogs.users.Values.OfType<User>()
                 .FirstOrDefault(u => u.id == recipientTelegramUserId);
 
@@ -509,7 +540,7 @@ public sealed class MtProtoBackgroundService : BackgroundService, IMtProtoServic
                 return ContentDeliveryResult.Failure("User not found");
             }
 
-            var inputFile = await Client.UploadFileAsync(filePath, null);
+            var inputFile = await _client!.UploadFileAsync(filePath, null);
             
             var media = new InputMediaUploadedDocument
             {
@@ -520,7 +551,7 @@ public sealed class MtProtoBackgroundService : BackgroundService, IMtProtoServic
                 ttl_seconds = selfDestructSeconds
             };
 
-            await Client.Messages_SendMedia(user, media, caption ?? "", DateTime.UtcNow.Ticks);
+            await _client!.Messages_SendMedia(user, media, caption ?? "", DateTime.UtcNow.Ticks);
 
             return ContentDeliveryResult.Success();
         }

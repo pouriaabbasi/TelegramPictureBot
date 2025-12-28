@@ -71,14 +71,10 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<Telegram.Bot.ITelegramBotClient>(sp => new Telegram.Bot.TelegramBotClient(botToken));
         services.AddScoped<ITelegramBotService>(sp => new TelegramBotService(botToken));
 
-        // MTProto Service - Lazy initialization to avoid errors on startup
-        // Service will only be created when actually needed (first use)
-        // This prevents errors when credentials are not yet configured
-        // Register MtProtoBackgroundService as both a singleton and a hosted service (like the working example)
+        // MTProto Service - Lazy initialization (NOT a hosted service anymore)
+        // Client will only be created on first actual use, preventing startup errors
+        // when credentials are not yet configured
         services.AddSingleton<MtProtoBackgroundService>();
-        services.AddHostedService(sp => sp.GetRequiredService<MtProtoBackgroundService>());
-        
-        // Register IMtProtoService to use the same MtProtoBackgroundService instance
         services.AddSingleton<IMtProtoService>(sp => sp.GetRequiredService<MtProtoBackgroundService>());
 
         return services;

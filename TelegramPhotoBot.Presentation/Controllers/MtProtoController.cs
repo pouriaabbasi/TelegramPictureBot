@@ -63,49 +63,8 @@ public class MtProtoController : ControllerBase
         HttpContext.Session.SetString(SessionKey, "authenticated");
         Console.WriteLine($"✅ Session created for token {tokenGuid}");
         
-        // Check if already authenticated or needs setup
-        if (_mtProto.User != null)
-        {
-            // Already authenticated - show success page
-            return Content($@"
-                <html>
-                <head>
-                    <meta charset='utf-8'>
-                    <title>Already Connected</title>
-                </head>
-                <body style='font-family: Arial; max-width: 600px; margin: 50px auto; padding: 20px;'>
-                    <h2>✅ Already Connected</h2>
-                    <p>Your MTProto is already configured and authenticated as <strong>{_mtProto.User.username ?? _mtProto.User.first_name}</strong>.</p>
-                    <p><a href='/mtproto/status' style='padding: 10px 20px; background: #007bff; color: white; text-decoration: none; border-radius: 5px;'>View Status</a></p>
-                    <p style='margin-top: 30px;'><a href='/mtproto/reset' style='color: #d9534f;'>Reset & Start Over</a></p>
-                </body>
-                </html>
-            ", "text/html; charset=utf-8");
-        }
-        
-        // Show welcome/setup page
-        return Content(@"
-            <html>
-            <head>
-                <meta charset='utf-8'>
-                <title>MTProto Setup - Welcome</title>
-            </head>
-            <body style='font-family: Arial; max-width: 600px; margin: 50px auto; padding: 20px;'>
-                <h2>🔐 MTProto Setup</h2>
-                <p>Welcome to the MTProto configuration wizard!</p>
-                <p>You'll need the following information:</p>
-                <ul>
-                    <li><strong>API ID</strong> and <strong>API Hash</strong> from <a href='https://my.telegram.org/apps' target='_blank'>my.telegram.org/apps</a></li>
-                    <li><strong>Phone Number</strong> (with country code, e.g., +989123456789)</li>
-                    <li>Access to your Telegram app for <strong>verification code</strong></li>
-                    <li><strong>2FA Password</strong> (if enabled on your account)</li>
-                </ul>
-                <p style='margin-top: 30px;'>
-                    <a href='/mtproto/status' style='padding: 10px 20px; background: #28a745; color: white; text-decoration: none; border-radius: 5px; font-size: 16px;'>🚀 Start Setup</a>
-                </p>
-            </body>
-            </html>
-        ", "text/html; charset=utf-8");
+        // Redirect to status page
+        return Redirect("/mtproto/status");
     }
     
     private bool IsAuthenticated()
@@ -115,7 +74,7 @@ public class MtProtoController : ControllerBase
     }
 
     [HttpGet("status")]
-    public ContentResult Status()
+    public async Task<ContentResult> Status()
     {
         // Check session authentication
         if (!IsAuthenticated())
@@ -134,215 +93,270 @@ public class MtProtoController : ControllerBase
                 </html>
             ", "text/html; charset=utf-8");
         }
-        switch (_mtProto.ConfigNeeded)
-        {
-            case "ready":
-                // Not yet configured - show setup instructions
-                return Content(@"
-                    <html>
-                    <head>
-                        <meta charset='utf-8'>
-                        <title>MTProto Setup</title>
-                    </head>
-                    <body style='font-family: Arial; max-width: 600px; margin: 50px auto; padding: 20px;'>
-                        <h2>🔐 MTProto Setup Required</h2>
-                        <p>MTProto is not configured yet. Please enter your credentials:</p>
-                        <ul>
-                            <li>Get <strong>API ID</strong> and <strong>API Hash</strong> from <a href='https://my.telegram.org/apps' target='_blank'>my.telegram.org/apps</a></li>
-                            <li>You'll need your <strong>Phone Number</strong> (with country code)</li>
-                            <li>Keep your Telegram app ready for <strong>verification code</strong></li>
-                        </ul>
-                        <p style='margin-top: 30px;'>
-                            <a href='/mtproto/setup/start' style='padding: 10px 20px; background: #28a745; color: white; text-decoration: none; border-radius: 5px; font-size: 16px;'>🚀 Start Configuration</a>
-                        </p>
-                    </body>
-                    </html>
-                ", "text/html; charset=utf-8");
-            
-            case "connecting":
-                return Content(@"
-                    <html>
-                    <head>
-                        <meta charset='utf-8'>
-                        <title>MTProto - Connecting</title>
-                        <meta http-equiv='refresh' content='1'>
-                    </head>
-                    <body style='font-family: Arial; max-width: 600px; margin: 50px auto; padding: 20px;'>
-                        <h2>🔄 WTelegram is connecting...</h2>
-                        <p>Please wait...</p>
-                    </body>
-                    </html>
-                ", "text/html; charset=utf-8");
-            
-            case null:
-            case "authenticated":
-                return Content($@"
-                    <html>
-                    <head>
-                        <meta charset='utf-8'>
-                        <title>MTProto - Connected</title>
-                        <script>
-                            function confirmReset() {{
-                                if (confirm('⚠️ Warning!\n\nThis will:\n• Delete all MTProto credentials\n• Remove session file\n• Require full re-authentication\n\nAre you sure you want to continue?')) {{
-                                    window.location.href = 'reset';
-                                }}
-                            }}
-                        </script>
-                    </head>
-                    <body style='font-family: Arial; max-width: 600px; margin: 50px auto; padding: 20px;'>
-                        <h2>✅ Connected as {_mtProto.User?.username ?? _mtProto.User?.first_name ?? "User"}</h2>
-                        <p>MTProto authentication successful!</p>
-                        <p style='margin-top: 30px;'>
-                            <button onclick='confirmReset()' style='padding: 10px 20px; background: #d9534f; color: white; border: none; border-radius: 5px; cursor: pointer;'>🔄 Reset & Start Over</button>
-                        </p>
-                        <p style='font-size: 12px; color: #666; margin-top: 10px;'>
-                            <strong>Start Over:</strong> Clears all credentials and session data. Use this if you want to switch to a different Telegram account.
-                        </p>
-                    </body>
-                    </html>
-                ", "text/html; charset=utf-8");
-            
-            case "error":
-                return Content(@"
-                    <html>
-                    <head>
-                        <meta charset='utf-8'>
-                        <title>MTProto - Error</title>
-                        <script>
-                            function confirmReset() {
-                                if (confirm('⚠️ This will delete all credentials and session data.\n\nContinue?')) {
-                                    window.location.href = 'reset';
-                                }
-                            }
-                        </script>
-                    </head>
-                    <body style='font-family: Arial; max-width: 600px; margin: 50px auto; padding: 20px;'>
-                        <h2>❌ Connection Error</h2>
-                        <p>An error occurred during authentication.</p>
-                        <p style='margin-top: 20px;'>
-                            <button onclick='confirmReset()' style='padding: 10px 20px; background: #d9534f; color: white; border: none; border-radius: 5px; cursor: pointer;'>🔄 Reset & Try Again</button>
-                        </p>
-                    </body>
-                    </html>
-                ", "text/html; charset=utf-8");
-            
-            default:
-                var label = _mtProto.ConfigNeeded switch
-                {
-                    "api_id" => "API ID (from my.telegram.org/apps)",
-                    "api_hash" => "API Hash",
-                    "phone_number" => "Phone Number (e.g., +989123456789)",
-                    "verification_code" => "Verification Code (check your Telegram app)",
-                    "password" => "2FA Password",
-                    _ => _mtProto.ConfigNeeded
-                };
-                
-                var inputType = _mtProto.ConfigNeeded == "password" ? "password" : "text";
-                var placeholder = _mtProto.ConfigNeeded switch
-                {
-                    "api_id" => "12345678",
-                    "api_hash" => "0123456789abcdef0123456789abcdef",
-                    "phone_number" => "+989123456789",
-                    "verification_code" => "12345",
-                    "password" => "Your 2FA password",
-                    _ => ""
-                };
-                
-                return Content($@"
-                    <html>
-                    <head>
-                        <meta charset='utf-8'>
-                        <title>MTProto Setup</title>
-                        <script>
-                            function confirmReset() {{
-                                if (confirm('⚠️ This will delete all credentials and restart setup.\n\nContinue?')) {{
-                                    window.location.href = 'reset';
-                                }}
-                            }}
-                        </script>
-                    </head>
-                    <body style='font-family: Arial; max-width: 600px; margin: 50px auto; padding: 20px;'>
-                        <h2>🔐 MTProto Setup</h2>
-                        <p><strong>Step: {label}</strong></p>
-                        <form action='config' method='get' style='margin-top: 20px;'>
-                            <input name='value' type='{inputType}' placeholder='{placeholder}' autofocus required style='padding: 10px; width: 100%; max-width: 400px; font-size: 14px; border: 2px solid #ddd; border-radius: 5px;'/>
-                            <br><br>
-                            <button type='submit' style='padding: 10px 30px; background: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 14px;'>Submit</button>
-                        </form>
-                        <p style='margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;'>
-                            <button onclick='confirmReset()' style='padding: 8px 16px; background: transparent; color: #d9534f; border: 1px solid #d9534f; border-radius: 5px; cursor: pointer;'>🔄 Start Over</button>
-                            <br>
-                            <span style='font-size: 12px; color: #666;'>Clears all data and restarts setup</span>
-                        </p>
-                    </body>
-                    </html>
-                ", "text/html; charset=utf-8");
-        }
+        
+        // Load existing settings
+        var settingsRepo = HttpContext.RequestServices.GetRequiredService<Application.Interfaces.Repositories.IPlatformSettingsRepository>();
+        var apiId = await settingsRepo.GetValueAsync("telegram:mtproto:api_id", default) ?? "";
+        var apiHash = await settingsRepo.GetValueAsync("telegram:mtproto:api_hash", default) ?? "";
+        var phoneNumber = await settingsRepo.GetValueAsync("telegram:mtproto:phone_number", default) ?? "";
+        var duration = await settingsRepo.GetValueAsync("telegram:mtproto:default_duration", default) ?? "30";
+        var name = await settingsRepo.GetValueAsync("telegram:mtproto:account_name", default) ?? "";
+        
+        // Check authentication status
+        var isAuthenticated = _mtProto.User != null;
+        var statusMessage = isAuthenticated 
+            ? $"✅ Authenticated as <strong>{_mtProto.User?.username ?? _mtProto.User?.first_name ?? "User"}</strong>" 
+            : "⚠️ Not authenticated yet";
+        var needsVerification = _mtProto.ConfigNeeded == "verification_code" || _mtProto.ConfigNeeded == "password";
+        
+        return Content($@"
+            <html>
+            <head>
+                <meta charset='utf-8'>
+                <title>MTProto Configuration</title>
+                <style>
+                    body {{
+                        font-family: Arial, sans-serif;
+                        max-width: 700px;
+                        margin: 50px auto;
+                        padding: 20px;
+                        background: #f5f5f5;
+                    }}
+                    .container {{
+                        background: white;
+                        padding: 30px;
+                        border-radius: 10px;
+                        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                    }}
+                    h2 {{
+                        color: #333;
+                        margin-top: 0;
+                    }}
+                    .status {{
+                        padding: 15px;
+                        border-radius: 5px;
+                        margin-bottom: 20px;
+                        background: {(isAuthenticated ? "#d4edda" : "#fff3cd")};
+                        border: 1px solid {(isAuthenticated ? "#c3e6cb" : "#ffc107")};
+                        color: {(isAuthenticated ? "#155724" : "#856404")};
+                    }}
+                    .form-group {{
+                        margin-bottom: 20px;
+                    }}
+                    label {{
+                        display: block;
+                        margin-bottom: 5px;
+                        font-weight: bold;
+                        color: #555;
+                    }}
+                    input[type='text'], input[type='number'], input[type='password'] {{
+                        width: 100%;
+                        padding: 10px;
+                        border: 1px solid #ddd;
+                        border-radius: 5px;
+                        font-size: 14px;
+                        box-sizing: border-box;
+                    }}
+                    .help-text {{
+                        font-size: 12px;
+                        color: #777;
+                        margin-top: 5px;
+                    }}
+                    .button-group {{
+                        display: flex;
+                        gap: 10px;
+                        margin-top: 30px;
+                    }}
+                    button {{
+                        padding: 12px 24px;
+                        border: none;
+                        border-radius: 5px;
+                        font-size: 16px;
+                        cursor: pointer;
+                        transition: background 0.3s;
+                    }}
+                    .btn-primary {{
+                        background: #28a745;
+                        color: white;
+                        flex: 1;
+                    }}
+                    .btn-primary:hover {{
+                        background: #218838;
+                    }}
+                    .btn-danger {{
+                        background: #dc3545;
+                        color: white;
+                    }}
+                    .btn-danger:hover {{
+                        background: #c82333;
+                    }}
+                    .verification-section {{
+                        background: #e7f3ff;
+                        padding: 15px;
+                        border-radius: 5px;
+                        margin-top: 20px;
+                        border: 1px solid #bee5eb;
+                        {(needsVerification ? "" : "display: none;")}
+                    }}
+                    .external-link {{
+                        color: #007bff;
+                        text-decoration: none;
+                    }}
+                    .external-link:hover {{
+                        text-decoration: underline;
+                    }}
+                    input[readonly] {{
+                        background: #e9ecef;
+                        cursor: not-allowed;
+                    }}
+                </style>
+                <script>
+                    function confirmReset() {{
+                        if (confirm('⚠️ Warning!\n\nThis will:\n• Delete all MTProto credentials\n• Remove session file\n• Require full re-authentication\n\nAre you sure?')) {{
+                            window.location.href = '/mtproto/reset';
+                        }}
+                    }}
+                </script>
+            </head>
+            <body>
+                <div class='container'>
+                    <h2>🔐 MTProto Configuration</h2>
+                    
+                    <div class='status'>
+                        {statusMessage}
+                    </div>
+                    
+                    <form method='POST' action='/mtproto/save-config'>
+                        <div class='form-group'>
+                            <label for='api_id'>API ID *</label>
+                            <input type='text' id='api_id' name='api_id' value='{apiId}' required {(isAuthenticated ? "readonly" : "")}>
+                            <div class='help-text'>Get from <a href='https://my.telegram.org/apps' target='_blank' class='external-link'>my.telegram.org/apps</a></div>
+                        </div>
+                        
+                        <div class='form-group'>
+                            <label for='api_hash'>API Hash *</label>
+                            <input type='text' id='api_hash' name='api_hash' value='{(string.IsNullOrEmpty(apiHash) ? "" : "************************")}' {(isAuthenticated ? "readonly" : "")} {(isAuthenticated ? "" : "required")}>
+                            <div class='help-text'>32-character hexadecimal string from my.telegram.org</div>
+                        </div>
+                        
+                        <div class='form-group'>
+                            <label for='phone_number'>Phone Number *</label>
+                            <input type='text' id='phone_number' name='phone_number' value='{phoneNumber}' placeholder='+989123456789' required {(isAuthenticated ? "readonly" : "")}>
+                            <div class='help-text'>Include country code (e.g., +989123456789)</div>
+                        </div>
+                        
+                        <div class='form-group'>
+                            <label for='default_duration'>Default Self-Destruct Duration (seconds)</label>
+                            <input type='number' id='default_duration' name='default_duration' value='{duration}' min='1' max='60'>
+                            <div class='help-text'>Default timer for self-destructing photos/videos (1-60 seconds)</div>
+                        </div>
+                        
+                        <div class='form-group'>
+                            <label for='account_name'>Account Name (Optional)</label>
+                            <input type='text' id='account_name' name='account_name' value='{name}' placeholder='My Bot Account'>
+                            <div class='help-text'>Friendly name for this MTProto account</div>
+                        </div>
+                        
+                        {(needsVerification ? $@"
+                        <div class='verification-section'>
+                            <h3>📱 Verification Required</h3>
+                            <div class='form-group'>
+                                <label for='verification_code'>{(_mtProto.ConfigNeeded == "password" ? "2FA Password" : "Verification Code")}</label>
+                                <input type='{(_mtProto.ConfigNeeded == "password" ? "password" : "text")}' id='verification_code' name='verification_code' placeholder='Enter {(_mtProto.ConfigNeeded == "password" ? "password" : "code")}' required>
+                                <div class='help-text'>{(_mtProto.ConfigNeeded == "password" ? "Enter your Two-Factor Authentication password" : "Check your Telegram app for the verification code")}</div>
+                            </div>
+                        </div>
+                        " : "")}
+                        
+                        <div class='button-group'>
+                            <button type='submit' class='btn-primary'>{(isAuthenticated ? "💾 Update Settings" : (needsVerification ? "✅ Verify & Authenticate" : "🚀 Save & Authenticate"))}</button>
+                            <button type='button' class='btn-danger' onclick='confirmReset()'>🔄 Reset</button>
+                        </div>
+                    </form>
+                </div>
+            </body>
+            </html>
+        ", "text/html; charset=utf-8");
     }
 
-    [HttpGet("config")]
-    public async Task<ActionResult> Config(string value)
+    [HttpPost("save-config")]
+    public async Task<ActionResult> SaveConfig([FromForm] string api_id, [FromForm] string? api_hash, [FromForm] string phone_number, 
+        [FromForm] string? default_duration, [FromForm] string? account_name, [FromForm] string? verification_code)
     {
         // Check session authentication
         if (!IsAuthenticated())
         {
             return Redirect("/mtproto/status");
         }
-        
-        if (string.IsNullOrWhiteSpace(value))
-            return Redirect("status");
         
         try
         {
-            // Save the value to database for the Config callback to retrieve
-            var currentNeed = _mtProto.ConfigNeeded;
-            await SaveConfigValue(currentNeed, value);
+            var settingsRepo = HttpContext.RequestServices.GetRequiredService<Application.Interfaces.Repositories.IPlatformSettingsRepository>();
             
-            // Call DoLogin like the working example
-            await _mtProto.DoLogin(value);
+            // If verification code provided, submit it
+            if (!string.IsNullOrWhiteSpace(verification_code))
+            {
+                await _mtProto.DoLogin(verification_code);
+                return Redirect("/mtproto/status");
+            }
             
-            return Redirect("status");
+            // Save all settings FIRST and commit to database immediately
+            Console.WriteLine($"💾 Saving API ID: {api_id}");
+            await settingsRepo.SetValueAsync("telegram:mtproto:api_id", api_id, default);
+            
+            if (!string.IsNullOrWhiteSpace(api_hash) && api_hash != "************************")
+            {
+                Console.WriteLine($"💾 Saving API Hash: ***");
+                await settingsRepo.SetValueAsync("telegram:mtproto:api_hash", api_hash, default);
+            }
+            
+            Console.WriteLine($"💾 Saving Phone Number: {phone_number}");
+            await settingsRepo.SetValueAsync("telegram:mtproto:phone_number", phone_number, default);
+            
+            if (!string.IsNullOrWhiteSpace(default_duration))
+            {
+                await settingsRepo.SetValueAsync("telegram:mtproto:default_duration", default_duration, default);
+            }
+            
+            if (!string.IsNullOrWhiteSpace(account_name))
+            {
+                await settingsRepo.SetValueAsync("telegram:mtproto:account_name", account_name, default);
+            }
+            
+            // CRITICAL: Save changes to database immediately!
+            var dbContext = HttpContext.RequestServices.GetRequiredService<Infrastructure.Data.ApplicationDbContext>();
+            await dbContext.SaveChangesAsync();
+            Console.WriteLine("✅ All settings saved and committed to database");
+            
+            // Small delay to ensure DB write is fully committed
+            await Task.Delay(100);
+            
+            // Start authentication process AFTER settings are saved
+            if (_mtProto.User == null)
+            {
+                Console.WriteLine($"🔐 Starting authentication with phone: {phone_number}");
+                await _mtProto.DoLogin(phone_number);
+            }
+            
+            return Redirect("/mtproto/status");
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"❌ Config error: {ex.Message}");
+            Console.WriteLine($"❌ Save config error: {ex.Message}");
             return Content($@"
                 <html>
-                <head><title>MTProto - Error</title></head>
+                <head>
+                    <meta charset='utf-8'>
+                    <title>MTProto - Error</title>
+                </head>
                 <body style='font-family: Arial; max-width: 600px; margin: 50px auto; padding: 20px;'>
                     <h2>❌ Error</h2>
                     <p style='color: red;'>{ex.Message}</p>
-                    <p><a href='status'>Try Again</a> | <a href='reset'>Start Over</a></p>
+                    <p><a href='/mtproto/status'>Try Again</a> | <a href='/mtproto/reset'>Start Over</a></p>
                 </body>
                 </html>
-            ", "text/html");
+            ", "text/html; charset=utf-8");
         }
-    }
-
-    [HttpGet("setup/start")]
-    public async Task<ActionResult> SetupStart()
-    {
-        // Check session authentication
-        if (!IsAuthenticated())
-        {
-            return Redirect("/mtproto/status");
-        }
-        
-        // Set ConfigNeeded to api_id to start the wizard
-        var settingsRepo = HttpContext.RequestServices.GetRequiredService<Application.Interfaces.Repositories.IPlatformSettingsRepository>();
-        
-        // Check if already has settings
-        var existingApiId = await settingsRepo.GetValueAsync("telegram:mtproto:api_id", default);
-        if (!string.IsNullOrEmpty(existingApiId))
-        {
-            // Already configured, redirect to status
-            return Redirect("/mtproto/status");
-        }
-        
-        // Start fresh setup - ConfigNeeded should be set to api_id
-        _mtProto.ConfigNeeded = "api_id";
-        
-        return Redirect("/mtproto/status");
     }
 
     [HttpGet("reset")]
@@ -359,17 +373,18 @@ public class MtProtoController : ControllerBase
             var settingsRepo = HttpContext.RequestServices.GetRequiredService<Application.Interfaces.Repositories.IPlatformSettingsRepository>();
             
             // Clear all MTProto settings
-            await settingsRepo.ClearMtProtoSettingsAsync(default);
+            await settingsRepo.SetValueAsync("telegram:mtproto:api_id", null, default);
+            await settingsRepo.SetValueAsync("telegram:mtproto:api_hash", null, default);
+            await settingsRepo.SetValueAsync("telegram:mtproto:phone_number", null, default);
             
             // Delete session file
-            var sessionPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "WTelegram.session");
-            if (System.IO.File.Exists(sessionPath))
+            var sessionFile = "WTelegram.session";
+            if (System.IO.File.Exists(sessionFile))
             {
-                System.IO.File.Delete(sessionPath);
-                Console.WriteLine("🗑️ Deleted session file");
+                System.IO.File.Delete(sessionFile);
+                Console.WriteLine("✅ Session file deleted");
             }
             
-            // Reset ConfigNeeded
             _mtProto.ConfigNeeded = "api_id";
             
             return Content(@"
@@ -377,21 +392,19 @@ public class MtProtoController : ControllerBase
                 <head>
                     <meta charset='utf-8'>
                     <title>MTProto - Reset Complete</title>
+                    <meta http-equiv='refresh' content='2;url=/mtproto/status'>
                 </head>
                 <body style='font-family: Arial; max-width: 600px; margin: 50px auto; padding: 20px;'>
                     <h2>✅ Reset Complete</h2>
-                    <p>All MTProto settings and session data have been cleared.</p>
-                    <p>You can now configure MTProto from scratch.</p>
-                    <p style='margin-top: 30px;'>
-                        <a href='/mtproto/status' style='padding: 10px 20px; background: #28a745; color: white; text-decoration: none; border-radius: 5px;'>Start Fresh Setup</a>
-                    </p>
+                    <p>All credentials have been cleared.</p>
+                    <p>Redirecting to setup...</p>
                 </body>
                 </html>
             ", "text/html; charset=utf-8");
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"❌ Error resetting MTProto: {ex.Message}");
+            Console.WriteLine($"❌ Reset error: {ex.Message}");
             return Content($@"
                 <html>
                 <head>
@@ -400,17 +413,12 @@ public class MtProtoController : ControllerBase
                 </head>
                 <body style='font-family: Arial; max-width: 600px; margin: 50px auto; padding: 20px;'>
                     <h2>❌ Reset Error</h2>
-                    <p>An error occurred: {ex.Message}</p>
-                    <p><a href='/mtproto/status'>Back to Status</a></p>
+                    <p style='color: red;'>{ex.Message}</p>
+                    <p><a href='/mtproto/status'>Go Back</a></p>
                 </body>
                 </html>
             ", "text/html; charset=utf-8");
         }
     }
-
-    private async Task SaveConfigValue(string key, string value)
-    {
-        var settingsRepo = HttpContext.RequestServices.GetRequiredService<Application.Interfaces.Repositories.IPlatformSettingsRepository>();
-        await settingsRepo.SetValueAsync($"telegram:mtproto:{key}", value, isSecret: key == "api_hash" || key == "password", cancellationToken: default);
-    }
 }
+

@@ -466,6 +466,7 @@ public class MtProtoService : IMtProtoService, IAsyncDisposable
     public async Task<ContentDeliveryResult> SendPhotoWithTimerAsync(
         long recipientTelegramUserId,
         string filePathOrFileId,
+        Domain.Entities.Photo photoEntity,
         string? caption,
         int selfDestructSeconds,
         CancellationToken cancellationToken = default)

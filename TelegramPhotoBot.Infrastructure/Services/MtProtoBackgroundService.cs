@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.DependencyInjection;
 using TelegramPhotoBot.Application.Interfaces;
 using TelegramPhotoBot.Application.Interfaces.Repositories;
 using TelegramPhotoBot.Application.DTOs;
@@ -17,16 +18,16 @@ public sealed class MtProtoBackgroundService : BackgroundService, IMtProtoServic
     public User? User => Client.User;
     public string? ConfigNeeded { get; private set; } = "connecting";
 
-    private readonly IPlatformSettingsRepository _settingsRepo;
+    private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<MtProtoBackgroundService> _logger;
     private readonly ITelegramBotClient _botClient;
 
     public MtProtoBackgroundService(
-        IPlatformSettingsRepository settingsRepo,
+        IServiceProvider serviceProvider,
         ILogger<MtProtoBackgroundService> logger,
         ITelegramBotClient botClient)
     {
-        _settingsRepo = settingsRepo;
+        _serviceProvider = serviceProvider;
         _logger = logger;
         _botClient = botClient;
         
@@ -35,7 +36,9 @@ public sealed class MtProtoBackgroundService : BackgroundService, IMtProtoServic
         Client = new WTelegram.Client(what =>
         {
             // Synchronous config callback - must use .Result like the working example
-            var value = _settingsRepo.GetValueAsync($"telegram:mtproto:{what}", default).Result;
+            using var scope = _serviceProvider.CreateScope();
+            var settingsRepo = scope.ServiceProvider.GetRequiredService<IPlatformSettingsRepository>();
+            var value = settingsRepo.GetValueAsync($"telegram:mtproto:{what}", default).Result;
             Console.WriteLine($"📋 Config callback: {what} = {(what == "api_hash" ? "***" : value ?? "null")}");
             return value;
         });
@@ -51,7 +54,10 @@ public sealed class MtProtoBackgroundService : BackgroundService, IMtProtoServic
     {
         try
         {
-            var phoneNumber = await _settingsRepo.GetValueAsync("telegram:mtproto:phone_number", stoppingToken);
+            using var scope = _serviceProvider.CreateScope();
+            var settingsRepo = scope.ServiceProvider.GetRequiredService<IPlatformSettingsRepository>();
+            
+            var phoneNumber = await settingsRepo.GetValueAsync("telegram:mtproto:phone_number", stoppingToken);
             if (!string.IsNullOrWhiteSpace(phoneNumber))
             {
                 Console.WriteLine($"🔐 Starting login with phone: {phoneNumber}");
@@ -186,6 +192,7 @@ public sealed class MtProtoBackgroundService : BackgroundService, IMtProtoServic
     public async Task<ContentDeliveryResult> SendPhotoWithTimerAsync(
         long recipientTelegramUserId,
         string filePath,
+        Domain.Entities.Photo photoEntity,
         string? caption,
         int selfDestructSeconds,
         CancellationToken cancellationToken = default)
@@ -207,6 +214,43 @@ public sealed class MtProtoBackgroundService : BackgroundService, IMtProtoServic
                 return ContentDeliveryResult.Failure("User not found");
             }
 
+            // چک می‌کنیم که آیا cached MTProto info داریم
+            if (photoEntity != null && photoEntity.HasMtProtoPhotoInfo())
+            {
+                Console.WriteLine($"✅ Using cached MTProto photo info (ID: {photoEntity.MtProtoPhotoId})");
+                
+                try
+                {
+                    // استفاده از cached photo برای ارسال
+                    var inputPhoto = new InputPhoto
+                    {
+                        id = photoEntity.MtProtoPhotoId!.Value,
+                        access_hash = photoEntity.MtProtoAccessHash!.Value,
+                        file_reference = photoEntity.MtProtoFileReference!
+                    };
+                    
+                    var cachedMedia = new InputMediaPhoto
+                    {
+                        id = inputPhoto,
+                        flags = InputMediaPhoto.Flags.has_ttl_seconds,
+                        ttl_seconds = selfDestructSeconds
+                    };
+
+                    Console.WriteLine($"📤 Sending cached photo with {selfDestructSeconds}s timer...");
+                    await Client.Messages_SendMedia(user, cachedMedia, caption ?? "", DateTime.UtcNow.Ticks);
+                    
+                    Console.WriteLine($"✅ Photo sent successfully using cache!");
+                    return ContentDeliveryResult.Success();
+                }
+                catch (Exception cacheEx)
+                {
+                    Console.WriteLine($"⚠️ Failed to send cached photo: {cacheEx.Message}");
+                    Console.WriteLine($"⚠️ Will fall back to upload...");
+                    // ادامه میدیم به upload
+                }
+            }
+
+            // اگر cache نداشتیم یا ارسال cache fail شد، باید upload کنیم
             string fileToUpload = filePath;
             
             // تشخیص اینکه filePath یک Telegram file ID است یا فایل محلی
@@ -262,8 +306,23 @@ public sealed class MtProtoBackgroundService : BackgroundService, IMtProtoServic
             };
 
             // Send media
-            Console.WriteLine($"📤 Sending photo with {selfDestructSeconds}s timer...");
+            Console.WriteLine($"📤 Sending uploaded photo with {selfDestructSeconds}s timer...");
             var result = await Client.Messages_SendMedia(user, media, caption ?? "", DateTime.UtcNow.Ticks);
+
+            // Extract photo info from result for caching
+            if (photoEntity != null && result is Updates updates)
+            {
+                var sentMsg = updates.updates.OfType<UpdateNewMessage>()
+                    .Select(x => x.message)
+                    .OfType<Message>()
+                    .FirstOrDefault();
+                    
+                if (sentMsg?.media is MessageMediaPhoto mmp && mmp.photo is TL.Photo photo)
+                {
+                    Console.WriteLine($"💾 Caching MTProto photo info (ID: {photo.ID})");
+                    photoEntity.SetMtProtoPhotoInfo(photo.ID, photo.access_hash, photo.file_reference);
+                }
+            }
 
             Console.WriteLine($"✅ Photo sent successfully!");
             return ContentDeliveryResult.Success();

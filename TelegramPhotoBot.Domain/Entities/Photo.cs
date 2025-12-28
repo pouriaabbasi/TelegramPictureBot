@@ -19,6 +19,11 @@ public class Photo : AggregateRoot
     // Analytics
     public int ViewCount { get; private set; } = 0;
     
+    // MTProto cached data (برای جلوگیری از upload مجدد)
+    public long? MtProtoPhotoId { get; private set; }
+    public long? MtProtoAccessHash { get; private set; }
+    public byte[]? MtProtoFileReference { get; private set; }
+    
     // Navigation properties
     public virtual User Seller { get; private set; } = null!;
     public virtual Model Model { get; private set; } = null!;
@@ -97,5 +102,18 @@ public class Photo : AggregateRoot
     public bool RequiresPayment()
     {
         return Type == PhotoType.Premium;
+    }
+    
+    public void SetMtProtoPhotoInfo(long photoId, long accessHash, byte[] fileReference)
+    {
+        MtProtoPhotoId = photoId;
+        MtProtoAccessHash = accessHash;
+        MtProtoFileReference = fileReference;
+        MarkAsUpdated();
+    }
+    
+    public bool HasMtProtoPhotoInfo()
+    {
+        return MtProtoPhotoId.HasValue && MtProtoAccessHash.HasValue && MtProtoFileReference != null;
     }
 }

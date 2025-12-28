@@ -103,6 +103,7 @@ public class LazyMtProtoService : IMtProtoService
     public Task<ContentDeliveryResult> SendPhotoWithTimerAsync(
         long recipientTelegramUserId,
         string filePath,
+        Domain.Entities.Photo photoEntity,
         string? caption,
         int selfDestructSeconds,
         CancellationToken cancellationToken = default)
@@ -110,7 +111,7 @@ public class LazyMtProtoService : IMtProtoService
         try
         {
             var service = GetOrCreateService();
-            return service.SendPhotoWithTimerAsync(recipientTelegramUserId, filePath, caption, selfDestructSeconds, cancellationToken);
+            return service.SendPhotoWithTimerAsync(recipientTelegramUserId, filePath, photoEntity, caption, selfDestructSeconds, cancellationToken);
         }
         catch (InvalidOperationException)
         {

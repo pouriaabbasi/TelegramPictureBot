@@ -1,4 +1,5 @@
 using TelegramPhotoBot.Application.DTOs;
+using TelegramPhotoBot.Domain.Entities;
 
 namespace TelegramPhotoBot.Application.Interfaces;
 
@@ -23,6 +24,7 @@ public interface IMtProtoService
     Task<ContentDeliveryResult> SendPhotoWithTimerAsync(
         long recipientTelegramUserId,
         string filePath,
+        Photo photoEntity,
         string? caption,
         int selfDestructSeconds,
         CancellationToken cancellationToken = default);

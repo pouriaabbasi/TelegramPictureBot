@@ -1,5 +1,6 @@
 using TelegramPhotoBot.Application.DTOs;
 using TelegramPhotoBot.Application.Interfaces;
+using TelegramPhotoBot.Domain.Entities;
 
 namespace TelegramPhotoBot.Application.Services;
 
@@ -55,27 +56,33 @@ public class ContentDeliveryService : IContentDeliveryService
         }
 
         // Log view and increment view count if photoId is provided
+        Photo? photoEntity = null;
         if (request.PhotoId.HasValue && request.UserId.HasValue)
         {
-            var photo = await _photoRepository.GetByIdAsync(request.PhotoId.Value, cancellationToken);
-            if (photo != null)
+            photoEntity = await _photoRepository.GetByIdAsync(request.PhotoId.Value, cancellationToken);
+            if (photoEntity != null)
             {
                 // Log the view in history
                 await _viewHistoryRepository.LogViewAsync(
                     request.UserId.Value,
                     request.PhotoId.Value,
-                    photo.ModelId,
-                    photo.Type,
+                    photoEntity.ModelId,
+                    photoEntity.Type,
                     request.ViewerUsername,
-                    photo.Caption,
+                    photoEntity.Caption,
                     cancellationToken);
 
                 // Increment view count on the photo
-                photo.IncrementViewCount();
-                await _photoRepository.UpdateAsync(photo, cancellationToken);
+                photoEntity.IncrementViewCount();
+                await _photoRepository.UpdateAsync(photoEntity, cancellationToken);
                 
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
             }
+        }
+        else if (request.PhotoId.HasValue)
+        {
+            // حتی اگر UserId نباشه، باید photo entity رو بگیریم برای MTProto caching
+            photoEntity = await _photoRepository.GetByIdAsync(request.PhotoId.Value, cancellationToken);
         }
 
         // Send photo via MTProto with self-destruct timer
@@ -85,6 +92,7 @@ public class ContentDeliveryService : IContentDeliveryService
             var result = await _mtProtoService.SendPhotoWithTimerAsync(
                 request.RecipientTelegramUserId,
                 request.FilePath,
+                photoEntity!,
                 request.Caption,
                 request.SelfDestructSeconds,
                 cancellationToken);
@@ -92,6 +100,13 @@ public class ContentDeliveryService : IContentDeliveryService
             if (result.IsSuccess)
             {
                 Console.WriteLine($"✅ Photo sent successfully via MTProto");
+                
+                // Save MTProto photo info if updated
+                if (photoEntity != null && photoEntity.HasMtProtoPhotoInfo())
+                {
+                    await _photoRepository.UpdateAsync(photoEntity, cancellationToken);
+                    await _unitOfWork.SaveChangesAsync(cancellationToken);
+                }
             }
             else
             {

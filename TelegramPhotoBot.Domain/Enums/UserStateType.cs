@@ -63,6 +63,11 @@ public enum UserStateType
     /// <summary>
     /// Admin setting up MTProto - step 3: Phone Number
     /// </summary>
-    MtProtoSetupPhoneNumber = 11
+    MtProtoSetupPhoneNumber = 11,
+    
+    /// <summary>
+    /// Model setting their alias/nickname
+    /// </summary>
+    SettingModelAlias = 12
 }
 

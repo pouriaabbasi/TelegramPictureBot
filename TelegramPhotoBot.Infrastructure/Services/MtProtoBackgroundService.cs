@@ -9,11 +9,11 @@ using Telegram.Bot;
 namespace TelegramPhotoBot.Infrastructure.Services;
 
 /// <summary>
-/// MTProto service with lazy initialization - only creates client when first needed
+/// MTProto service with lazy initialization and thread-safe operations
 /// </summary>
 public sealed class MtProtoBackgroundService : IMtProtoService, IDisposable
 {
-    private readonly SemaphoreSlim _authLock = new SemaphoreSlim(1, 1);
+    // Only keep initialization lock - WTelegram.Client is thread-safe for operations
     private readonly SemaphoreSlim _initLock = new SemaphoreSlim(1, 1);
     private bool _isAuthenticated = false;
     private bool _isInitialized = false;
@@ -127,7 +127,6 @@ public sealed class MtProtoBackgroundService : IMtProtoService, IDisposable
     public void Dispose()
     {
         _client?.Dispose();
-        _authLock?.Dispose();
         _initLock?.Dispose();
     }
 
@@ -172,7 +171,9 @@ public sealed class MtProtoBackgroundService : IMtProtoService, IDisposable
             return; // Already authenticated
         }
 
-        await _authLock.WaitAsync(cancellationToken);
+        // Use initialization lock instead of separate auth lock
+        // This prevents multiple simultaneous auth attempts
+        await _initLock.WaitAsync(cancellationToken);
         try
         {
             if (_isAuthenticated && _client?.User != null)
@@ -205,17 +206,29 @@ public sealed class MtProtoBackgroundService : IMtProtoService, IDisposable
         }
         finally
         {
-            _authLock.Release();
+            _initLock.Release();
         }
     }
 
     public async Task<bool> IsContactAsync(long recipientTelegramUserId, CancellationToken cancellationToken = default)
     {
+        var detailedStatus = await CheckDetailedContactStatusAsync(recipientTelegramUserId, cancellationToken);
+        return detailedStatus.IsMutualContact;
+    }
+
+    public async Task<Application.DTOs.DetailedContactStatus> CheckDetailedContactStatusAsync(
+        long recipientTelegramUserId, 
+        CancellationToken cancellationToken = default)
+    {
+        // Add timeout to prevent long-running operations from blocking
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeoutCts.CancelAfter(TimeSpan.FromSeconds(30)); // 30 second timeout
+        
         try
         {
-            await EnsureAuthenticatedAsync(cancellationToken); // ← Ensure authenticated
+            await EnsureAuthenticatedAsync(timeoutCts.Token);
             
-            Console.WriteLine($"🔍 Checking contact status for user {recipientTelegramUserId}...");
+            Console.WriteLine($"🔍 Checking detailed contact status for user {recipientTelegramUserId}...");
             
             var dialogs = await _client!.Messages_GetAllDialogs();
             var user = dialogs.users.Values.OfType<User>()
@@ -224,7 +237,13 @@ public sealed class MtProtoBackgroundService : IMtProtoService, IDisposable
             if (user == null)
             {
                 Console.WriteLine($"❌ User {recipientTelegramUserId} not found in dialogs");
-                return false;
+                return new Application.DTOs.DetailedContactStatus
+                {
+                    IsContact = false,
+                    IsMutualContact = false,
+                    IsAutoAddSuccessful = false,
+                    ErrorMessage = "User not found in dialogs"
+                };
             }
 
             // لاگ کردن اطلاعات user
@@ -233,11 +252,15 @@ public sealed class MtProtoBackgroundService : IMtProtoService, IDisposable
             Console.WriteLine($"  - Username: {user.username}");
             Console.WriteLine($"  - First Name: {user.first_name}");
             Console.WriteLine($"  - Access Hash: {user.access_hash}");
+            Console.WriteLine($"  - Phone: {user.phone ?? "NULL"}");
             Console.WriteLine($"  - contact: {user.flags.HasFlag(User.Flags.contact)}");
             Console.WriteLine($"  - mutual_contact: {user.flags.HasFlag(User.Flags.mutual_contact)}");
 
+            bool wasAlreadyContact = user.flags.HasFlag(User.Flags.contact);
+            bool autoAddSuccessful = wasAlreadyContact;
+
             // مرحله 1: اگر در کانتکت نیست، از طرف فرستنده اضافه می‌کنیم
-            if (!user.flags.HasFlag(User.Flags.contact))
+            if (!wasAlreadyContact)
             {
                 Console.WriteLine($"⚠️ User {recipientTelegramUserId} is not in sender's contacts. Adding automatically...");
                 
@@ -257,25 +280,46 @@ public sealed class MtProtoBackgroundService : IMtProtoService, IDisposable
                         add_phone_privacy_exception: false
                     );
                     
-                    Console.WriteLine($"✅ Successfully added user {recipientTelegramUserId} to sender's contacts with label");
+                    Console.WriteLine($"✅ Contacts_AddContact API call succeeded for user {recipientTelegramUserId}");
                     
-                    // دوباره fetch می‌کنیم
+                    // دوباره fetch می‌کنیم تا ببینیم واقعاً اضافه شده یا نه
+                    // Reduce delay from 500ms to 300ms for faster response
+                    await Task.Delay(300, timeoutCts.Token);
                     var updatedDialogs = await _client!.Messages_GetAllDialogs();
                     user = updatedDialogs.users.Values.OfType<User>()
                         .FirstOrDefault(u => u.id == recipientTelegramUserId);
                     
                     if (user == null)
                     {
-                        Console.WriteLine($"❌ Failed to fetch updated user info");
-                        return false;
+                        Console.WriteLine($"❌ Failed to fetch updated user info after add");
+                        autoAddSuccessful = false;
                     }
-                    
-                    Console.WriteLine($"📊 Updated flags - contact: {user.flags.HasFlag(User.Flags.contact)}, mutual_contact: {user.flags.HasFlag(User.Flags.mutual_contact)}");
+                    else
+                    {
+                        autoAddSuccessful = user.flags.HasFlag(User.Flags.contact);
+                        Console.WriteLine($"📊 After auto-add - contact: {autoAddSuccessful}, mutual_contact: {user.flags.HasFlag(User.Flags.mutual_contact)}");
+                        
+                        if (!autoAddSuccessful)
+                        {
+                            Console.WriteLine($"⚠️ Auto-add API succeeded but contact flag is still false. This likely means user needs to be added with phone number.");
+                        }
+                    }
+                }
+                catch (OperationCanceledException)
+                {
+                    Console.WriteLine($"⏱️ Contact check operation timed out for user {recipientTelegramUserId}");
+                    return new Application.DTOs.DetailedContactStatus
+                    {
+                        IsContact = false,
+                        IsMutualContact = false,
+                        IsAutoAddSuccessful = false,
+                        ErrorMessage = "Operation timed out"
+                    };
                 }
                 catch (Exception addEx)
                 {
                     Console.WriteLine($"❌ Failed to add contact: {addEx.Message}");
-                    return false;
+                    autoAddSuccessful = false;
                 }
             }
             else
@@ -284,24 +328,48 @@ public sealed class MtProtoBackgroundService : IMtProtoService, IDisposable
             }
             
             // مرحله 2: چک می‌کنیم که mutual_contact هست یا نه
-            // این یعنی subscriber هم باید sender رو توی کانتکتش اضافه کرده باشه
-            bool isMutualContact = user.flags.HasFlag(User.Flags.mutual_contact);
+            bool isMutualContact = user != null && user.flags.HasFlag(User.Flags.mutual_contact);
+            bool isContact = user != null && user.flags.HasFlag(User.Flags.contact);
             
             if (!isMutualContact)
             {
                 Console.WriteLine($"⚠️ Not mutual contact! User {recipientTelegramUserId} has NOT added sender to their contacts.");
-                Console.WriteLine($"❌ Cannot send self-destructing media without mutual contact.");
-                return false;
             }
-            
-            Console.WriteLine($"✅ Mutual contact confirmed! Both parties have each other in contacts.");
-            return true;
+            else
+            {
+                Console.WriteLine($"✅ Mutual contact confirmed! Both parties have each other in contacts.");
+            }
+
+            return new Application.DTOs.DetailedContactStatus
+            {
+                IsContact = isContact,
+                IsMutualContact = isMutualContact,
+                IsAutoAddSuccessful = autoAddSuccessful,
+                ErrorMessage = null
+            };
+        }
+        catch (OperationCanceledException)
+        {
+            Console.WriteLine($"⏱️ Contact check operation timed out for user {recipientTelegramUserId}");
+            return new Application.DTOs.DetailedContactStatus
+            {
+                IsContact = false,
+                IsMutualContact = false,
+                IsAutoAddSuccessful = false,
+                ErrorMessage = "Operation timed out after 30 seconds"
+            };
         }
         catch (Exception ex)
         {
             Console.WriteLine($"❌ Error checking contact: {ex.Message}");
             Console.WriteLine($"❌ Stack trace: {ex.StackTrace}");
-            throw;
+            return new Application.DTOs.DetailedContactStatus
+            {
+                IsContact = false,
+                IsMutualContact = false,
+                IsAutoAddSuccessful = false,
+                ErrorMessage = ex.Message
+            };
         }
     }
 
@@ -581,6 +649,27 @@ public sealed class MtProtoBackgroundService : IMtProtoService, IDisposable
     public async Task<bool> TestAuthenticationAsync(CancellationToken cancellationToken = default)
     {
         return ConfigNeeded == null || ConfigNeeded == "authenticated";
+    }
+
+    public async Task<string?> GetAuthenticatedUsernameAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await EnsureAuthenticatedAsync(cancellationToken);
+            
+            if (_client?.User?.username != null)
+            {
+                return $"@{_client.User.username}";
+            }
+            
+            _logger.LogWarning("Authenticated user does not have a username");
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting authenticated username");
+            return null;
+        }
     }
 }
 

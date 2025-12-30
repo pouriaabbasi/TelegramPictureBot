@@ -21,6 +21,9 @@ public class ModelConfiguration : IEntityTypeConfiguration<Model>
         builder.Property(m => m.Bio)
             .HasMaxLength(500);
 
+        builder.Property(m => m.Alias)
+            .HasMaxLength(100); // Non-unique, optional
+
         builder.Property(m => m.Status)
             .IsRequired()
             .HasConversion<int>(); // Store enum as int

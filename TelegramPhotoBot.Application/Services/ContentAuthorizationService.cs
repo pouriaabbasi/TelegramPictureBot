@@ -5,18 +5,15 @@ namespace TelegramPhotoBot.Application.Services;
 
 public class ContentAuthorizationService : IContentAuthorizationService
 {
-    private readonly ISubscriptionRepository _subscriptionRepository;
     private readonly IPurchaseRepository _purchaseRepository;
     private readonly IModelSubscriptionService _modelSubscriptionService;
     private readonly IPhotoRepository _photoRepository;
 
     public ContentAuthorizationService(
-        ISubscriptionRepository subscriptionRepository,
         IPurchaseRepository purchaseRepository,
         IModelSubscriptionService modelSubscriptionService,
         IPhotoRepository photoRepository)
     {
-        _subscriptionRepository = subscriptionRepository ?? throw new ArgumentNullException(nameof(subscriptionRepository));
         _purchaseRepository = purchaseRepository ?? throw new ArgumentNullException(nameof(purchaseRepository));
         _modelSubscriptionService = modelSubscriptionService ?? throw new ArgumentNullException(nameof(modelSubscriptionService));
         _photoRepository = photoRepository ?? throw new ArgumentNullException(nameof(photoRepository));
@@ -53,10 +50,9 @@ public class ContentAuthorizationService : IContentAuthorizationService
 
     public async Task<bool> HasActiveSubscriptionAsync(Guid userId, CancellationToken cancellationToken = default)
     {
-        // Note: This is the old platform-wide subscription check
-        // Keeping for backward compatibility, but most checks should use model-specific subscriptions
-        var subscription = await _subscriptionRepository.GetActiveSubscriptionByUserIdAsync(userId, cancellationToken);
-        return subscription != null && subscription.IsActive();
+        // Platform-wide subscriptions are no longer supported
+        // All subscriptions are now model-specific
+        return false;
     }
 
     public async Task<bool> HasPurchasedPhotoAsync(Guid userId, Guid photoId, CancellationToken cancellationToken = default)

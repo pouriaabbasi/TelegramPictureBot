@@ -16,37 +16,15 @@ public static class TestDataBuilder
             false);
     }
 
-    public static SubscriptionPlan CreateTestSubscriptionPlan(Guid adminId, long price = 1000, int durationDays = 30)
-    {
-        return new SubscriptionPlan(
-            "Test Plan",
-            "Test subscription plan",
-            new TelegramStars(price),
-            durationDays,
-            adminId);
-    }
-
-    public static Photo CreateTestPhoto(Guid sellerId, long price = 500, string? filePath = null)
+    public static Photo CreateTestPhoto(Guid sellerId, Guid modelId, long price = 500, string? filePath = null)
     {
         return new Photo(
-            new FileInfo("test.jpg", filePath: filePath ?? "/test/test.jpg"),
+            new TelegramPhotoBot.Domain.ValueObjects.FileInfo("test.jpg", filePath: filePath ?? "/test/test.jpg"),
             sellerId,
+            modelId,
             new TelegramStars(price),
+            Domain.Enums.PhotoType.Premium,
             "Test photo");
-    }
-
-    public static Subscription CreateTestSubscription(
-        Guid userId,
-        Guid planId,
-        int daysRemaining = 25)
-    {
-        return new Subscription(
-            userId,
-            planId,
-            new DateRange(
-                DateTime.UtcNow.AddDays(-5),
-                DateTime.UtcNow.AddDays(daysRemaining)),
-            new TelegramStars(1000));
     }
 
     public static PurchasePhoto CreateTestPurchasePhoto(

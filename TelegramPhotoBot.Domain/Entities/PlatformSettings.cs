@@ -59,6 +59,10 @@ public class PlatformSettings : BaseEntity
         public const string PlatformName = "platform:name";
         public const string PlatformDescription = "platform:description";
         public const string DefaultSelfDestructSeconds = "platform:default_self_destruct_seconds";
+        
+        // Single Model Mode Settings
+        public const string SingleModelMode = "platform:single_model_mode";
+        public const string DefaultModelId = "platform:default_model_id";
 
         /// <summary>
         /// Determines if a setting key contains sensitive data
@@ -90,6 +94,8 @@ public class PlatformSettings : BaseEntity
                 PlatformName => "Platform display name",
                 PlatformDescription => "Platform description",
                 DefaultSelfDestructSeconds => "Default self-destruct timer for media (seconds)",
+                SingleModelMode => "Enable single model mode (true/false)",
+                DefaultModelId => "Default model ID for single model mode",
                 _ => "Platform setting"
             };
         }

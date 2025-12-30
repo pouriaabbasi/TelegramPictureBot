@@ -13,11 +13,8 @@ public class ApplicationDbContext : DbContext
 
     public DbSet<User> Users => Set<User>();
     public DbSet<Photo> Photos => Set<Photo>();
-    public DbSet<SubscriptionPlan> SubscriptionPlans => Set<SubscriptionPlan>();
-    public DbSet<Subscription> Subscriptions => Set<Subscription>();
     public DbSet<Purchase> Purchases => Set<Purchase>();
     public DbSet<PurchasePhoto> PurchasePhotos => Set<PurchasePhoto>();
-    public DbSet<PurchaseSubscription> PurchaseSubscriptions => Set<PurchaseSubscription>();
     
     // Marketplace entities
     public DbSet<Model> Models => Set<Model>();
@@ -27,6 +24,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<ViewHistory> ViewHistories => Set<ViewHistory>();
     public DbSet<PlatformSettings> PlatformSettings => Set<PlatformSettings>();
     public DbSet<MtProtoAccessToken> MtProtoAccessTokens => Set<MtProtoAccessToken>();
+    public DbSet<UserContactVerification> UserContactVerifications => Set<UserContactVerification>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -38,14 +36,13 @@ public class ApplicationDbContext : DbContext
         // Configure Query Filters for Soft Delete
         modelBuilder.Entity<User>().HasQueryFilter(u => !u.IsDeleted);
         modelBuilder.Entity<Photo>().HasQueryFilter(p => !p.IsDeleted);
-        modelBuilder.Entity<SubscriptionPlan>().HasQueryFilter(sp => !sp.IsDeleted);
-        modelBuilder.Entity<Subscription>().HasQueryFilter(s => !s.IsDeleted);
         modelBuilder.Entity<Purchase>().HasQueryFilter(p => !p.IsDeleted);
         modelBuilder.Entity<Model>().HasQueryFilter(m => !m.IsDeleted);
         modelBuilder.Entity<DemoAccess>().HasQueryFilter(da => !da.IsDeleted);
         modelBuilder.Entity<UserState>().HasQueryFilter(us => !us.IsDeleted);
         modelBuilder.Entity<ViewHistory>().HasQueryFilter(vh => !vh.IsDeleted);
         modelBuilder.Entity<PlatformSettings>().HasQueryFilter(ps => !ps.IsDeleted);
+        modelBuilder.Entity<UserContactVerification>().HasQueryFilter(ucv => !ucv.IsDeleted);
     }
 
     public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)

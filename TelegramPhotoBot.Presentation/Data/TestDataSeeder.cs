@@ -54,17 +54,6 @@ public static class TestDataSeeder
         modelUser.PromoteToModel(testModel.Id);
         await context.SaveChangesAsync();
 
-        // Create subscription plan
-        var subscriptionPlan = new SubscriptionPlan(
-            "Premium Monthly",
-            "Premium subscription with unlimited access to all photos",
-            new TelegramStars(1000),
-            30,
-            adminUser.Id);
-
-        context.SubscriptionPlans.Add(subscriptionPlan);
-        await context.SaveChangesAsync();
-
         // Create test photos
         // For testing, we'll use paths relative to the application directory
         var basePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "TestPhotos");
@@ -114,7 +103,6 @@ public static class TestDataSeeder
         Console.WriteLine($"   - Admin User ID: {adminUser.Id}");
         Console.WriteLine($"   - Model User ID: {modelUser.Id}");
         Console.WriteLine($"   - Model ID: {testModel.Id}");
-        Console.WriteLine($"   - Subscription Plan ID: {subscriptionPlan.Id}");
         Console.WriteLine($"   - Photos created: 3");
         Console.WriteLine($"   - Test photos directory: {Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "TestPhotos")}");
     }

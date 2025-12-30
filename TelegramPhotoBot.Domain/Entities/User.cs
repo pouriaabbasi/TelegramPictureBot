@@ -24,9 +24,6 @@ public class User : AggregateRoot
 
     private readonly List<Photo> _photos = new();
     public virtual IReadOnlyCollection<Photo> Photos => _photos.AsReadOnly();
-
-    private readonly List<Subscription> _subscriptions = new();
-    public virtual IReadOnlyCollection<Subscription> Subscriptions => _subscriptions.AsReadOnly();
     
     private readonly List<ModelSubscription> _modelSubscriptions = new();
     public virtual IReadOnlyCollection<ModelSubscription> ModelSubscriptions => _modelSubscriptions.AsReadOnly();

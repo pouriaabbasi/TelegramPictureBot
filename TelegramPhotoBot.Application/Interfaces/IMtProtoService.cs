@@ -17,6 +17,11 @@ public interface IMtProtoService
     /// Checks if a user has the sender account in their contacts
     /// </summary>
     Task<bool> IsContactAsync(long recipientTelegramUserId, CancellationToken cancellationToken = default);
+    
+    /// <summary>
+    /// Checks detailed contact status including auto-add success
+    /// </summary>
+    Task<DetailedContactStatus> CheckDetailedContactStatusAsync(long recipientTelegramUserId, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Sends a photo with self-destruct timer
@@ -54,5 +59,11 @@ public interface IMtProtoService
     /// Returns null if login successful, or the next required value (like "verification_code", "password")
     /// </summary>
     Task<string?> LoginAsync(string loginInfo, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets the authenticated sender's username (for sharing with recipients)
+    /// Returns @username if available, null otherwise
+    /// </summary>
+    Task<string?> GetAuthenticatedUsernameAsync(CancellationToken cancellationToken = default);
 }
 

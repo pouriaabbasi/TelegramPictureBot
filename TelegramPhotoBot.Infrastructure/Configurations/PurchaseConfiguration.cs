@@ -16,7 +16,6 @@ public class PurchaseConfiguration : IEntityTypeConfiguration<Purchase>
         builder.HasDiscriminator<string>("PurchaseType")
             .HasValue<Purchase>("Purchase")
             .HasValue<PurchasePhoto>("PurchasePhoto")
-            .HasValue<PurchaseSubscription>("PurchaseSubscription")
             .HasValue<ModelSubscription>("ModelSubscription");
 
         builder.HasKey(p => p.Id);

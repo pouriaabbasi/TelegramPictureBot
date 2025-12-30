@@ -12,15 +12,18 @@ namespace TelegramPhotoBot.Tests.Services;
 public class PaymentVerificationServiceTests
 {
     private readonly Mock<IPurchaseRepository> _purchaseRepositoryMock;
+    private readonly Mock<IUserRepository> _userRepositoryMock;
     private readonly Mock<IUnitOfWork> _unitOfWorkMock;
     private readonly PaymentVerificationService _service;
 
     public PaymentVerificationServiceTests()
     {
         _purchaseRepositoryMock = new Mock<IPurchaseRepository>();
+        _userRepositoryMock = new Mock<IUserRepository>();
         _unitOfWorkMock = new Mock<IUnitOfWork>();
         _service = new PaymentVerificationService(
             _purchaseRepositoryMock.Object,
+            _userRepositoryMock.Object,
             _unitOfWorkMock.Object);
     }
 
@@ -28,9 +31,17 @@ public class PaymentVerificationServiceTests
     public async Task VerifyPaymentAsync_DuplicatePayment_ReturnsFailure()
     {
         // Arrange
+        var userId = Guid.NewGuid();
+        var photoId = Guid.NewGuid();
         var paymentId = "payment-123";
-        var purchase = new PurchasePhoto(Guid.NewGuid(), Guid.NewGuid(), new TelegramStars(500));
+        var purchase = new PurchasePhoto(userId, photoId, new TelegramStars(500));
         purchase.MarkPaymentCompleted(paymentId);
+
+        // Create a mock user
+        var user = new User(new TelegramUserId(123456789), "testuser");
+        _userRepositoryMock
+            .Setup(r => r.GetByIdAsync(userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(user);
 
         _purchaseRepositoryMock
             .Setup(r => r.GetByTelegramPaymentIdAsync(paymentId, It.IsAny<CancellationToken>()))
@@ -40,7 +51,7 @@ public class PaymentVerificationServiceTests
         {
             TelegramPaymentId = paymentId,
             PurchaseId = purchase.Id,
-            TelegramUserId = purchase.UserId,
+            TelegramUserId = 123456789,
             Amount = 500,
             Currency = "XTR"
         };
@@ -62,6 +73,12 @@ public class PaymentVerificationServiceTests
         var purchase = new PurchasePhoto(userId, photoId, new TelegramStars(500));
         var paymentId = "payment-123";
 
+        // Create a mock user
+        var user = new User(new TelegramUserId(987654321), "testuser");
+        _userRepositoryMock
+            .Setup(r => r.GetByIdAsync(userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(user);
+
         _purchaseRepositoryMock
             .Setup(r => r.GetByTelegramPaymentIdAsync(paymentId, It.IsAny<CancellationToken>()))
             .ReturnsAsync((Purchase?)null);
@@ -78,7 +95,7 @@ public class PaymentVerificationServiceTests
         {
             TelegramPaymentId = paymentId,
             PurchaseId = purchase.Id,
-            TelegramUserId = userId,
+            TelegramUserId = 987654321,
             Amount = 500,
             Currency = "XTR"
         };
@@ -100,6 +117,12 @@ public class PaymentVerificationServiceTests
         var purchase = new PurchasePhoto(userId, photoId, new TelegramStars(500));
         var paymentId = "payment-123";
 
+        // Create a mock user
+        var user = new User(new TelegramUserId(555555555), "testuser");
+        _userRepositoryMock
+            .Setup(r => r.GetByIdAsync(userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(user);
+
         _purchaseRepositoryMock
             .Setup(r => r.GetByTelegramPaymentIdAsync(paymentId, It.IsAny<CancellationToken>()))
             .ReturnsAsync((Purchase?)null);
@@ -112,7 +135,7 @@ public class PaymentVerificationServiceTests
         {
             TelegramPaymentId = paymentId,
             PurchaseId = purchase.Id,
-            TelegramUserId = userId,
+            TelegramUserId = 555555555,
             Amount = 500,
             Currency = "USD" // Invalid currency
         };

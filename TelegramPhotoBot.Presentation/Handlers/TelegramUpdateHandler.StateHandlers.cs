@@ -1040,5 +1040,94 @@ public partial class TelegramUpdateHandler
             await _telegramBotService.SendMessageWithButtonsAsync(chatId, errorMessage, errorKeyboard, cancellationToken);
         }
     }
+
+    /// <summary>
+    /// Handles model alias input
+    /// </summary>
+    private async Task HandleModelAliasInputAsync(Guid userId, long chatId, string? input, CancellationToken cancellationToken)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(input))
+            {
+                await _telegramBotService.SendMessageAsync(chatId, 
+                    "❌ Please send a valid alias or send /cancel to go back.", 
+                    cancellationToken);
+                return;
+            }
+
+            // Check for cancel command
+            if (input.Trim().ToLower() == "/cancel")
+            {
+                await _userStateRepository.ClearStateAsync(userId, cancellationToken);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+                await HandleModelDashboardAsync(userId, chatId, cancellationToken);
+                return;
+            }
+
+            // Get model
+            var model = await _modelService.GetModelByUserIdAsync(userId, cancellationToken);
+            if (model == null)
+            {
+                await _userStateRepository.ClearStateAsync(userId, cancellationToken);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+                await _telegramBotService.SendMessageAsync(chatId, "❌ You are not registered as a model.", cancellationToken);
+                return;
+            }
+
+            // Check if user wants to clear alias
+            if (input.Trim().ToLower() == "clear")
+            {
+                model.SetAlias(null);
+                await _modelRepository.UpdateAsync(model, cancellationToken);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+                await _userStateRepository.ClearStateAsync(userId, cancellationToken);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+                await _telegramBotService.SendMessageAsync(chatId, 
+                    "✅ Your alias has been removed successfully!", 
+                    cancellationToken);
+                await HandleModelDashboardAsync(userId, chatId, cancellationToken);
+                return;
+            }
+
+            // Validate alias length
+            if (input.Length > 100)
+            {
+                await _telegramBotService.SendMessageAsync(chatId, 
+                    "❌ Alias is too long. Please use 100 characters or less.\n\nSend /cancel to go back.", 
+                    cancellationToken);
+                return;
+            }
+
+            // Set alias
+            model.SetAlias(input.Trim());
+            await _modelRepository.UpdateAsync(model, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            // Clear state
+            await _userStateRepository.ClearStateAsync(userId, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            // Send success message
+            await _telegramBotService.SendMessageAsync(chatId, 
+                $"✅ Your alias has been set to: {input.Trim()}\n\n" +
+                "This will be displayed alongside your display name.", 
+                cancellationToken);
+
+            // Show dashboard
+            await HandleModelDashboardAsync(userId, chatId, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Error in HandleModelAliasInputAsync: {ex.Message}");
+            await _userStateRepository.ClearStateAsync(userId, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+            await _telegramBotService.SendMessageAsync(chatId, 
+                $"❌ Error setting alias: {ex.Message}\n\nPlease try again.", 
+                cancellationToken);
+        }
+    }
 }
 

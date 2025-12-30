@@ -785,6 +785,24 @@ public class MtProtoService : IMtProtoService, IAsyncDisposable
         }
     }
 
+    public Task<DetailedContactStatus> CheckDetailedContactStatusAsync(long recipientTelegramUserId, CancellationToken cancellationToken = default)
+    {
+        // This service is deprecated - just return a stub result
+        return Task.FromResult(new DetailedContactStatus
+        {
+            IsContact = false,
+            IsMutualContact = false,
+            IsAutoAddSuccessful = false,
+            ErrorMessage = "This MTProto service implementation is deprecated. Use MtProtoBackgroundService instead."
+        });
+    }
+
+    public Task<string?> GetAuthenticatedUsernameAsync(CancellationToken cancellationToken = default)
+    {
+        // This service is deprecated - return null
+        return Task.FromResult<string?>(null);
+    }
+
     public async ValueTask DisposeAsync()
     {
         if (_client != null)

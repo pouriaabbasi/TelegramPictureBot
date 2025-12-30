@@ -12,7 +12,6 @@ public class PaymentCallbackHandler
 {
     private readonly IPaymentVerificationService _paymentVerificationService;
     private readonly ITelegramBotService _telegramBotService;
-    private readonly ISubscriptionService _subscriptionService;
     private readonly IContentDeliveryService _contentDeliveryService;
     private readonly IPhotoRepository _photoRepository;
     private readonly IPurchaseRepository _purchaseRepository;
@@ -21,7 +20,6 @@ public class PaymentCallbackHandler
     public PaymentCallbackHandler(
         IPaymentVerificationService paymentVerificationService,
         ITelegramBotService telegramBotService,
-        ISubscriptionService subscriptionService,
         IContentDeliveryService contentDeliveryService,
         IPhotoRepository photoRepository,
         IPurchaseRepository purchaseRepository,
@@ -29,7 +27,6 @@ public class PaymentCallbackHandler
     {
         _paymentVerificationService = paymentVerificationService ?? throw new ArgumentNullException(nameof(paymentVerificationService));
         _telegramBotService = telegramBotService ?? throw new ArgumentNullException(nameof(telegramBotService));
-        _subscriptionService = subscriptionService ?? throw new ArgumentNullException(nameof(subscriptionService));
         _contentDeliveryService = contentDeliveryService ?? throw new ArgumentNullException(nameof(contentDeliveryService));
         _photoRepository = photoRepository ?? throw new ArgumentNullException(nameof(photoRepository));
         _purchaseRepository = purchaseRepository ?? throw new ArgumentNullException(nameof(purchaseRepository));
@@ -183,23 +180,11 @@ public class PaymentCallbackHandler
         long chatId,
         CancellationToken cancellationToken)
     {
-        var purchase = await _purchaseRepository.GetByIdAsync(purchaseId, cancellationToken);
-        if (purchase is PurchaseSubscription subscriptionPurchase)
-        {
-            var subscription = await _subscriptionService.GetActiveSubscriptionAsync(
-                purchase.UserId,
-                cancellationToken);
-
-            if (subscription != null)
-            {
-                var message = $"✅ Subscription activated!\n\n" +
-                             $"Plan: {subscription.PlanName}\n" +
-                             $"Valid until: {subscription.EndDate:yyyy-MM-dd}\n" +
-                             $"Days remaining: {subscription.DaysRemaining}";
-
-                await _telegramBotService.SendMessageAsync(chatId, message, cancellationToken);
-            }
-        }
+        // Platform subscriptions are deprecated - this handler is no longer used
+        await _telegramBotService.SendMessageAsync(
+            chatId, 
+            "❌ Platform subscriptions are not supported. Please use model subscriptions instead.",
+            cancellationToken);
     }
 
     private async Task HandlePhotoPurchaseCompletionAsync(

@@ -15,6 +15,7 @@ public class Model : AggregateRoot
     // Model profile
     public string DisplayName { get; private set; }
     public string? Bio { get; private set; }
+    public string? Alias { get; private set; } // Non-unique nickname for the model
     
     // Demo/preview content
     public FileInfo? DemoImage { get; private set; }
@@ -62,6 +63,12 @@ public class Model : AggregateRoot
             
         DisplayName = displayName;
         Bio = bio;
+        MarkAsUpdated();
+    }
+
+    public void SetAlias(string? alias)
+    {
+        Alias = alias;
         MarkAsUpdated();
     }
 

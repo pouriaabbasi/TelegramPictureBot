@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using TelegramPhotoBot.Infrastructure.Data;
 
@@ -11,9 +12,11 @@ using TelegramPhotoBot.Infrastructure.Data;
 namespace TelegramPhotoBot.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20251230090236_AddUserContactVerification")]
+    partial class AddUserContactVerification
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -68,10 +71,6 @@ namespace TelegramPhotoBot.Infrastructure.Migrations
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("Alias")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
 
                     b.Property<DateTime?>("ApprovedAt")
                         .HasColumnType("datetime2");
@@ -343,6 +342,89 @@ namespace TelegramPhotoBot.Infrastructure.Migrations
                     b.UseTphMappingStrategy();
                 });
 
+            modelBuilder.Entity("TelegramPhotoBot.Domain.Entities.Subscription", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<Guid>("SubscriptionPlanId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Status")
+                        .HasDatabaseName("IX_Subscriptions_Status");
+
+                    b.HasIndex("SubscriptionPlanId");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("IX_Subscriptions_UserId");
+
+                    b.ToTable("Subscriptions", (string)null);
+                });
+
+            modelBuilder.Entity("TelegramPhotoBot.Domain.Entities.SubscriptionPlan", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("CreatedByAdminId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<int>("DurationDays")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByAdminId");
+
+                    b.HasIndex("IsActive")
+                        .HasDatabaseName("IX_SubscriptionPlans_IsActive");
+
+                    b.ToTable("SubscriptionPlans", (string)null);
+                });
+
             modelBuilder.Entity("TelegramPhotoBot.Domain.Entities.User", b =>
                 {
                     b.Property<Guid>("Id")
@@ -591,6 +673,19 @@ namespace TelegramPhotoBot.Infrastructure.Migrations
                     b.HasDiscriminator().HasValue("PurchasePhoto");
                 });
 
+            modelBuilder.Entity("TelegramPhotoBot.Domain.Entities.PurchaseSubscription", b =>
+                {
+                    b.HasBaseType("TelegramPhotoBot.Domain.Entities.Purchase");
+
+                    b.Property<Guid>("SubscriptionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasIndex("SubscriptionId")
+                        .HasDatabaseName("IX_PurchaseSubscription_SubscriptionId");
+
+                    b.HasDiscriminator().HasValue("PurchaseSubscription");
+                });
+
             modelBuilder.Entity("TelegramPhotoBot.Domain.Entities.DemoAccess", b =>
                 {
                     b.HasOne("TelegramPhotoBot.Domain.Entities.Model", "Model")
@@ -807,6 +902,100 @@ namespace TelegramPhotoBot.Infrastructure.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("TelegramPhotoBot.Domain.Entities.Subscription", b =>
+                {
+                    b.HasOne("TelegramPhotoBot.Domain.Entities.SubscriptionPlan", "SubscriptionPlan")
+                        .WithMany("Subscriptions")
+                        .HasForeignKey("SubscriptionPlanId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TelegramPhotoBot.Domain.Entities.User", "User")
+                        .WithMany("Subscriptions")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.OwnsOne("TelegramPhotoBot.Domain.ValueObjects.TelegramStars", "PaidAmount", b1 =>
+                        {
+                            b1.Property<Guid>("SubscriptionId")
+                                .HasColumnType("uniqueidentifier");
+
+                            b1.Property<long>("Amount")
+                                .HasColumnType("bigint")
+                                .HasColumnName("PaidAmount");
+
+                            b1.HasKey("SubscriptionId");
+
+                            b1.ToTable("Subscriptions");
+
+                            b1.WithOwner()
+                                .HasForeignKey("SubscriptionId");
+                        });
+
+                    b.OwnsOne("TelegramPhotoBot.Domain.ValueObjects.DateRange", "Period", b1 =>
+                        {
+                            b1.Property<Guid>("SubscriptionId")
+                                .HasColumnType("uniqueidentifier");
+
+                            b1.Property<DateTime>("EndDate")
+                                .HasColumnType("datetime2")
+                                .HasColumnName("EndDate");
+
+                            b1.Property<DateTime>("StartDate")
+                                .HasColumnType("datetime2")
+                                .HasColumnName("StartDate");
+
+                            b1.HasKey("SubscriptionId");
+
+                            b1.ToTable("Subscriptions");
+
+                            b1.WithOwner()
+                                .HasForeignKey("SubscriptionId");
+                        });
+
+                    b.Navigation("PaidAmount")
+                        .IsRequired();
+
+                    b.Navigation("Period")
+                        .IsRequired();
+
+                    b.Navigation("SubscriptionPlan");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("TelegramPhotoBot.Domain.Entities.SubscriptionPlan", b =>
+                {
+                    b.HasOne("TelegramPhotoBot.Domain.Entities.User", "CreatedByAdmin")
+                        .WithMany()
+                        .HasForeignKey("CreatedByAdminId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.OwnsOne("TelegramPhotoBot.Domain.ValueObjects.TelegramStars", "Price", b1 =>
+                        {
+                            b1.Property<Guid>("SubscriptionPlanId")
+                                .HasColumnType("uniqueidentifier");
+
+                            b1.Property<long>("Amount")
+                                .HasColumnType("bigint")
+                                .HasColumnName("Price");
+
+                            b1.HasKey("SubscriptionPlanId");
+
+                            b1.ToTable("SubscriptionPlans");
+
+                            b1.WithOwner()
+                                .HasForeignKey("SubscriptionPlanId");
+                        });
+
+                    b.Navigation("CreatedByAdmin");
+
+                    b.Navigation("Price")
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("TelegramPhotoBot.Domain.Entities.User", b =>
                 {
                     b.OwnsOne("TelegramPhotoBot.Domain.ValueObjects.TelegramUserId", "TelegramUserId", b1 =>
@@ -933,10 +1122,26 @@ namespace TelegramPhotoBot.Infrastructure.Migrations
                     b.Navigation("Photo");
                 });
 
+            modelBuilder.Entity("TelegramPhotoBot.Domain.Entities.PurchaseSubscription", b =>
+                {
+                    b.HasOne("TelegramPhotoBot.Domain.Entities.Subscription", "Subscription")
+                        .WithMany()
+                        .HasForeignKey("SubscriptionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Subscription");
+                });
+
             modelBuilder.Entity("TelegramPhotoBot.Domain.Entities.Model", b =>
                 {
                     b.Navigation("Photos");
 
+                    b.Navigation("Subscriptions");
+                });
+
+            modelBuilder.Entity("TelegramPhotoBot.Domain.Entities.SubscriptionPlan", b =>
+                {
                     b.Navigation("Subscriptions");
                 });
 
@@ -949,6 +1154,8 @@ namespace TelegramPhotoBot.Infrastructure.Migrations
                     b.Navigation("Photos");
 
                     b.Navigation("Purchases");
+
+                    b.Navigation("Subscriptions");
                 });
 #pragma warning restore 612, 618
         }

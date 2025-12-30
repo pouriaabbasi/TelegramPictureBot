@@ -49,14 +49,7 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
             .IsRequired(false);
 
         // Configure backing fields for collections
-        // UserRoles collection is removed in marketplace version
-        // builder.Metadata.FindNavigation(nameof(User.UserRoles))!
-        //     .SetPropertyAccessMode(PropertyAccessMode.Field);
-
         builder.Metadata.FindNavigation(nameof(User.Photos))!
-            .SetPropertyAccessMode(PropertyAccessMode.Field);
-
-        builder.Metadata.FindNavigation(nameof(User.Subscriptions))!
             .SetPropertyAccessMode(PropertyAccessMode.Field);
         
         var modelSubscriptionsNav = builder.Metadata.FindNavigation(nameof(User.ModelSubscriptions));

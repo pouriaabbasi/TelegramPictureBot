@@ -100,6 +100,26 @@ public class LazyMtProtoService : IMtProtoService
         }
     }
 
+    public Task<DetailedContactStatus> CheckDetailedContactStatusAsync(long recipientTelegramUserId, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var service = GetOrCreateService();
+            return service.CheckDetailedContactStatusAsync(recipientTelegramUserId, cancellationToken);
+        }
+        catch (InvalidOperationException)
+        {
+            Console.WriteLine("⚠️ MTProto service not configured. Please use /mtproto_setup to configure.");
+            return Task.FromResult(new DetailedContactStatus
+            {
+                IsContact = false,
+                IsMutualContact = false,
+                IsAutoAddSuccessful = false,
+                ErrorMessage = "MTProto service not configured"
+            });
+        }
+    }
+
     public Task<ContentDeliveryResult> SendPhotoWithTimerAsync(
         long recipientTelegramUserId,
         string filePath,
@@ -206,6 +226,20 @@ public class LazyMtProtoService : IMtProtoService
         {
             Console.WriteLine("⚠️ MTProto service not configured. Please use /mtproto_setup to configure.");
             return Task.FromResult<string?>("not_configured");
+        }
+    }
+
+    public Task<string?> GetAuthenticatedUsernameAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var service = GetOrCreateService();
+            return service.GetAuthenticatedUsernameAsync(cancellationToken);
+        }
+        catch (InvalidOperationException)
+        {
+            Console.WriteLine("⚠️ MTProto service not configured. Please use /mtproto_setup to configure.");
+            return Task.FromResult<string?>(null);
         }
     }
 }

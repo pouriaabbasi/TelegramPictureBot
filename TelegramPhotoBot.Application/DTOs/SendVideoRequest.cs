@@ -5,6 +5,7 @@ namespace TelegramPhotoBot.Application.DTOs;
 /// </summary>
 public class SendVideoRequest
 {
+    public Guid? UserId { get; init; }
     public long RecipientTelegramUserId { get; init; }
     public string FilePath { get; init; } = string.Empty;
     public string? Caption { get; init; }

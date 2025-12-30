@@ -7,20 +7,26 @@ namespace TelegramPhotoBot.Application.Services;
 public class ContentDeliveryService : IContentDeliveryService
 {
     private readonly IMtProtoService _mtProtoService;
+    private readonly IContactVerificationService _contactVerificationService;
     private readonly IViewHistoryRepository _viewHistoryRepository;
     private readonly IPhotoRepository _photoRepository;
+    private readonly IUserRepository _userRepository;
     private readonly IUnitOfWork _unitOfWork;
     private const string ContactRequiredMessage = "Please add this account to your contacts first";
 
     public ContentDeliveryService(
         IMtProtoService mtProtoService,
+        IContactVerificationService contactVerificationService,
         IViewHistoryRepository viewHistoryRepository,
         IPhotoRepository photoRepository,
+        IUserRepository userRepository,
         IUnitOfWork unitOfWork)
     {
         _mtProtoService = mtProtoService ?? throw new ArgumentNullException(nameof(mtProtoService));
+        _contactVerificationService = contactVerificationService ?? throw new ArgumentNullException(nameof(contactVerificationService));
         _viewHistoryRepository = viewHistoryRepository ?? throw new ArgumentNullException(nameof(viewHistoryRepository));
         _photoRepository = photoRepository ?? throw new ArgumentNullException(nameof(photoRepository));
+        _userRepository = userRepository ?? throw new ArgumentNullException(nameof(userRepository));
         _unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
     }
 
@@ -33,34 +39,46 @@ public class ContentDeliveryService : IContentDeliveryService
     {
         Console.WriteLine($"📤 ContentDeliveryService.SendPhotoAsync called for user {request.RecipientTelegramUserId}, photoId: {request.PhotoId}");
         
-        // Validate contact before sending - catch exceptions to show error messages
-        bool isContact;
-        try
+        // Get user entity if UserId is provided
+        User? recipientUser = null;
+        if (request.UserId.HasValue)
         {
-            Console.WriteLine($"🔍 Validating contact for user {request.RecipientTelegramUserId}...");
-            isContact = await ValidateContactAsync(request.RecipientTelegramUserId, cancellationToken);
-            Console.WriteLine($"✅ Contact validation result: {isContact}");
-        }
-        catch (Exception ex)
-        {
-            // If there's an error checking contact, return error message
-            Console.WriteLine($"❌ Exception during contact validation: {ex.Message}");
-            Console.WriteLine($"❌ Exception type: {ex.GetType().FullName}");
-            Console.WriteLine($"❌ Stack trace: {ex.StackTrace}");
-            return ContentDeliveryResult.Failure($"❌ خطا در بررسی وضعیت کانتکت: {ex.Message}");
+            recipientUser = await _userRepository.GetByIdAsync(request.UserId.Value, cancellationToken);
         }
 
-        if (!isContact)
+        if (recipientUser == null)
         {
-            return ContentDeliveryResult.Failure("❌ لطفاً ابتدا حساب فرستنده را به کانتکت‌های خود اضافه کنید");
+            Console.WriteLine($"❌ User not found for userId: {request.UserId}");
+            return ContentDeliveryResult.Failure("❌ کاربر یافت نشد");
         }
+
+        // Verify and ensure mutual contact using the new service
+        Console.WriteLine($"🔍 Verifying mutual contact for user {request.RecipientTelegramUserId}...");
+        var verificationResult = await _contactVerificationService.VerifyAndEnsureMutualContactAsync(
+            recipientUser,
+            request.RecipientTelegramUserId,
+            cancellationToken);
+
+        if (verificationResult.RequiresManualAction || !verificationResult.IsMutualContact)
+        {
+            Console.WriteLine($"⚠️ Contact verification requires manual action or not mutual");
+            
+            // Return the instruction message to user
+            var message = verificationResult.UserInstructionMessage 
+                ?? verificationResult.ErrorMessage 
+                ?? "❌ لطفاً ابتدا حساب فرستنده را به کانتکت‌های خود اضافه کنید";
+            
+            return ContentDeliveryResult.Failure(message, verificationResult);
+        }
+
+        Console.WriteLine($"✅ Mutual contact verified successfully");
 
         // Log view and increment view count if photoId is provided
         Photo? photoEntity = null;
-        if (request.PhotoId.HasValue && request.UserId.HasValue)
+        if (request.PhotoId.HasValue)
         {
             photoEntity = await _photoRepository.GetByIdAsync(request.PhotoId.Value, cancellationToken);
-            if (photoEntity != null)
+            if (photoEntity != null && request.UserId.HasValue)
             {
                 // Log the view in history
                 await _viewHistoryRepository.LogViewAsync(
@@ -78,11 +96,6 @@ public class ContentDeliveryService : IContentDeliveryService
                 
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
             }
-        }
-        else if (request.PhotoId.HasValue)
-        {
-            // حتی اگر UserId نباشه، باید photo entity رو بگیریم برای MTProto caching
-            photoEntity = await _photoRepository.GetByIdAsync(request.PhotoId.Value, cancellationToken);
         }
 
         // Send photo via MTProto with self-destruct timer
@@ -126,21 +139,34 @@ public class ContentDeliveryService : IContentDeliveryService
 
     public async Task<ContentDeliveryResult> SendVideoAsync(SendVideoRequest request, CancellationToken cancellationToken = default)
     {
-        // Validate contact before sending - catch exceptions to show error messages
-        bool isContact;
-        try
+        Console.WriteLine($"📤 ContentDeliveryService.SendVideoAsync called for user {request.RecipientTelegramUserId}");
+        
+        // Get user entity if UserId is provided
+        User? recipientUser = null;
+        if (request.UserId.HasValue)
         {
-            isContact = await ValidateContactAsync(request.RecipientTelegramUserId, cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            // If there's an error checking contact, return error message
-            return ContentDeliveryResult.Failure($"❌ خطا در بررسی وضعیت کانتکت: {ex.Message}");
+            recipientUser = await _userRepository.GetByIdAsync(request.UserId.Value, cancellationToken);
         }
 
-        if (!isContact)
+        if (recipientUser == null)
         {
-            return ContentDeliveryResult.Failure("❌ لطفاً ابتدا حساب فرستنده را به کانتکت‌های خود اضافه کنید");
+            Console.WriteLine($"❌ User not found for userId: {request.UserId}");
+            return ContentDeliveryResult.Failure("❌ کاربر یافت نشد");
+        }
+
+        // Verify and ensure mutual contact using the new service
+        var verificationResult = await _contactVerificationService.VerifyAndEnsureMutualContactAsync(
+            recipientUser,
+            request.RecipientTelegramUserId,
+            cancellationToken);
+
+        if (verificationResult.RequiresManualAction || !verificationResult.IsMutualContact)
+        {
+            var message = verificationResult.UserInstructionMessage 
+                ?? verificationResult.ErrorMessage 
+                ?? "❌ لطفاً ابتدا حساب فرستنده را به کانتکت‌های خود اضافه کنید";
+            
+            return ContentDeliveryResult.Failure(message, verificationResult);
         }
 
         // Send video via MTProto with self-destruct timer

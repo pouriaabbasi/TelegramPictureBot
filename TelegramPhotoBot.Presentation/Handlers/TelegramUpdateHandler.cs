@@ -2,6 +2,7 @@
 using TelegramPhotoBot.Application.DTOs;
 using TelegramPhotoBot.Application.Interfaces;
 using TelegramPhotoBot.Application.Interfaces.Repositories;
+using TelegramPhotoBot.Application.Services;
 using TelegramPhotoBot.Domain.Entities;
 using TelegramPhotoBot.Presentation.DTOs;
 
@@ -15,11 +16,9 @@ public partial class TelegramUpdateHandler
     private readonly IUserService _userService;
     private readonly IContentAuthorizationService _contentAuthorizationService;
     private readonly IContentDeliveryService _contentDeliveryService;
-    private readonly ISubscriptionService _subscriptionService;
     private readonly IPhotoPurchaseService _photoPurchaseService;
     private readonly ITelegramBotService _telegramBotService;
     private readonly IPhotoRepository _photoRepository;
-    private readonly ISubscriptionPlanRepository _subscriptionPlanRepository;
     private readonly IPurchaseRepository _purchaseRepository;
     private readonly IUserRepository _userRepository;
     private readonly IUnitOfWork _unitOfWork;
@@ -37,16 +36,16 @@ public partial class TelegramUpdateHandler
     private readonly IPlatformSettingsRepository _platformSettingsRepository;
     private readonly IMtProtoService _mtProtoService;
     private readonly IMtProtoAccessTokenService _mtProtoAccessTokenService;
+    private readonly IServiceProvider _serviceProvider;
+    private readonly ISingleModelModeService _singleModelModeService;
 
     public TelegramUpdateHandler(
         IUserService userService,
         IContentAuthorizationService contentAuthorizationService,
         IContentDeliveryService contentDeliveryService,
-        ISubscriptionService subscriptionService,
         IPhotoPurchaseService photoPurchaseService,
         ITelegramBotService telegramBotService,
         IPhotoRepository photoRepository,
-        ISubscriptionPlanRepository subscriptionPlanRepository,
         IPurchaseRepository purchaseRepository,
         IUserRepository userRepository,
         IUnitOfWork unitOfWork,
@@ -61,16 +60,16 @@ public partial class TelegramUpdateHandler
         IViewHistoryRepository viewHistoryRepository,
         IPlatformSettingsRepository platformSettingsRepository,
         IMtProtoService mtProtoService,
-        IMtProtoAccessTokenService mtProtoAccessTokenService)
+        IMtProtoAccessTokenService mtProtoAccessTokenService,
+        IServiceProvider serviceProvider,
+        ISingleModelModeService singleModelModeService)
     {
         _userService = userService ?? throw new ArgumentNullException(nameof(userService));
         _contentAuthorizationService = contentAuthorizationService ?? throw new ArgumentNullException(nameof(contentAuthorizationService));
         _contentDeliveryService = contentDeliveryService ?? throw new ArgumentNullException(nameof(contentDeliveryService));
-        _subscriptionService = subscriptionService ?? throw new ArgumentNullException(nameof(subscriptionService));
         _photoPurchaseService = photoPurchaseService ?? throw new ArgumentNullException(nameof(photoPurchaseService));
         _telegramBotService = telegramBotService ?? throw new ArgumentNullException(nameof(telegramBotService));
         _photoRepository = photoRepository ?? throw new ArgumentNullException(nameof(photoRepository));
-        _subscriptionPlanRepository = subscriptionPlanRepository ?? throw new ArgumentNullException(nameof(subscriptionPlanRepository));
         _purchaseRepository = purchaseRepository ?? throw new ArgumentNullException(nameof(purchaseRepository));
         _userRepository = userRepository ?? throw new ArgumentNullException(nameof(userRepository));
         _unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
@@ -86,6 +85,8 @@ public partial class TelegramUpdateHandler
         _platformSettingsRepository = platformSettingsRepository ?? throw new ArgumentNullException(nameof(platformSettingsRepository));
         _mtProtoService = mtProtoService ?? throw new ArgumentNullException(nameof(mtProtoService));
         _mtProtoAccessTokenService = mtProtoAccessTokenService ?? throw new ArgumentNullException(nameof(mtProtoAccessTokenService));
+        _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
+        _singleModelModeService = singleModelModeService ?? throw new ArgumentNullException(nameof(singleModelModeService));
     }
 
     /// <summary>
@@ -304,6 +305,20 @@ public partial class TelegramUpdateHandler
             return;
         }
 
+        // Track that user sent a message (important for contact verification)
+        // This indicates user is responsive and likely added the contact
+        try
+        {
+            var contactVerificationService = _serviceProvider.GetRequiredService<IContactVerificationService>();
+            await contactVerificationService.MarkUserSentMessageAsync(user.Id, cancellationToken);
+            Console.WriteLine($"✅ Marked user {user.Id} as having sent a message");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"⚠️ Failed to mark user message: {ex.Message}");
+            // Non-critical, continue processing
+        }
+
         // For any other message, show the main menu
         Console.WriteLine($"📋 Showing main menu for user {user.Id}, text: {message.Text ?? "(no text)"}");
         await ShowMainMenuAsync(user.Id, message.ChatId, cancellationToken);
@@ -465,13 +480,16 @@ public partial class TelegramUpdateHandler
         switch (action)
         {
             case "buy":
-                if (secondPart == "sub")
-                {
-                    await HandleBuySubscriptionCommandAsync(user.Id, thirdPart, chatId, cancellationToken);
-                }
-                else if (secondPart == "photo")
+                if (secondPart == "photo")
                 {
                     await HandleBuyPhotoCommandAsync(user.Id, thirdPart, chatId, cancellationToken);
+                }
+                else
+                {
+                    await _telegramBotService.SendMessageAsync(
+                        chatId,
+                        "❌ Platform subscriptions are no longer supported. Please subscribe to individual models instead.",
+                        cancellationToken);
                 }
                 break;
 
@@ -521,6 +539,26 @@ public partial class TelegramUpdateHandler
                 {
                     await HandleAdminRejectModelAsync(user.Id, rejectModelId, chatId, callbackQuery.Message.MessageId, cancellationToken);
                 }
+                else if (secondPart == "settings")
+                {
+                    await HandleAdminSettingsAsync(chatId, cancellationToken);
+                }
+                else if (secondPart == "single" && thirdPart == "model" && parts.Length > 3)
+                {
+                    var fourthPart = parts[3];
+                    if (fourthPart == "settings")
+                    {
+                        await HandleAdminSingleModelSettingsAsync(user.Id, chatId, cancellationToken);
+                    }
+                    else if (fourthPart == "enable" && parts.Length > 4 && Guid.TryParse(parts[4], out var enableModelId))
+                    {
+                        await HandleAdminEnableSingleModelModeAsync(user.Id, enableModelId, chatId, cancellationToken);
+                    }
+                    else if (fourthPart == "disable")
+                    {
+                        await HandleAdminDisableSingleModelModeAsync(user.Id, chatId, cancellationToken);
+                    }
+                }
                 break;
 
             case "reapply":
@@ -552,6 +590,9 @@ public partial class TelegramUpdateHandler
                         break;
                     case "set_subscription":
                         await HandleModelSetSubscriptionPromptAsync(user.Id, chatId, cancellationToken);
+                        break;
+                    case "set_alias":
+                        await HandleModelSetAliasPromptAsync(user.Id, chatId, cancellationToken);
                         break;
                 }
                 break;
@@ -637,6 +678,10 @@ public partial class TelegramUpdateHandler
                     await HandleMtProtoSetupPhoneNumberInputAsync(userId, chatId, userState.StateData, message.Text, cancellationToken);
                     break;
 
+                case Domain.Enums.UserStateType.SettingModelAlias:
+                    await HandleModelAliasInputAsync(userId, chatId, message.Text, cancellationToken);
+                    break;
+
                 default:
                     await _userStateRepository.ClearStateAsync(userId, cancellationToken);
                     await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -672,6 +717,10 @@ public partial class TelegramUpdateHandler
             
             var isAdmin = user?.Role == Domain.Enums.UserRole.Admin;
             var isModel = user?.Role == Domain.Enums.UserRole.Model;
+            
+            // Check if single model mode is enabled
+            var isSingleModelMode = await _singleModelModeService.IsSingleModelModeAsync(cancellationToken);
+            var defaultModel = isSingleModelMode ? await _singleModelModeService.GetDefaultModelAsync(cancellationToken) : null;
 
             var message = "Welcome to Premium Content Marketplace!\n\n" +
                          "Browse content creators, subscribe to your favorites, and access exclusive content!\n\n" +
@@ -680,32 +729,51 @@ public partial class TelegramUpdateHandler
             Console.WriteLine($"📝 Message prepared, building buttons...");
             var buttons = new List<List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>>();
 
-        // Row 1: Browse Models
-        buttons.Add(new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
+        // Row 1: Browse Models OR View Model Content (Single Model Mode)
+        if (isSingleModelMode && defaultModel != null)
         {
-            Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
-                "Browse Models",
-                "menu_browse_models")
-        });
+            // Use alias if available, otherwise use DisplayName
+            var modelDisplayText = !string.IsNullOrWhiteSpace(defaultModel.Alias) 
+                ? defaultModel.Alias 
+                : defaultModel.DisplayName;
+            
+            // In single model mode, show direct link to model content
+            buttons.Add(new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
+            {
+                Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
+                    $"📸 View {modelDisplayText}'s Content",
+                    $"view_model_{defaultModel.Id}")
+            });
+        }
+        else
+        {
+            // Normal mode: Show Browse Models
+            buttons.Add(new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
+            {
+                Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
+                    "🔍 Browse Models",
+                    "menu_browse_models")
+            });
+        }
 
         // Row 2: My Subscriptions & My Content
         buttons.Add(new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
         {
             Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
-                "My Subscriptions",
+                "💎 My Subscriptions",
                 "menu_my_subscriptions"),
             Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
-                "My Content",
+                "📁 My Content",
                 "menu_my_content")
         });
 
-        // Row 4: Become a Model (if not already a model)
-        if (!isModel && !isAdmin)
+        // Row 4: Become a Model (if not already a model and not in single model mode)
+        if (!isModel && !isAdmin && !isSingleModelMode)
         {
             buttons.Add(new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
             {
                 Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
-                    "Become a Model",
+                    "⭐ Become a Model",
                     "menu_register_model")
             });
         }
@@ -716,7 +784,7 @@ public partial class TelegramUpdateHandler
             buttons.Add(new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
             {
                 Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
-                    "Model Dashboard",
+                    "📊 Model Dashboard",
                     "menu_model_dashboard")
             });
         }
@@ -756,55 +824,11 @@ public partial class TelegramUpdateHandler
 
     private async Task HandleSubscriptionsCommandAsync(long chatId, CancellationToken cancellationToken)
     {
-        try
-        {
-            // Get all active subscription plans
-            var plans = await _subscriptionPlanRepository.GetAllAsync(cancellationToken);
-            var activePlans = plans.Where(p => p.IsActive && !p.IsDeleted).ToList();
-
-            if (!activePlans.Any())
-            {
-                await _telegramBotService.SendMessageAsync(
-                    chatId,
-                    "No subscription plans available at the moment.",
-                    cancellationToken);
-                return;
-            }
-
-            var message = " Available Subscription Plans:\n\n";
-
-            var buttons = new List<List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>>();
-
-            foreach (var plan in activePlans)
-            {
-                message += $" {plan.Name}\n";
-                message += $"   {plan.Description}\n";
-                message += $"   Price: {plan.Price.Amount} stars\n";
-                message += $"   Duration: {plan.DurationDays} days\n\n";
-
-                // Add buttons for this plan
-                buttons.Add(new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
-                {
-                    Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
-                        $" Buy {plan.Name}",
-                        $"buy_sub_{plan.Id}"),
-                    Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
-                        $" Test Buy",
-                        $"test_sub_{plan.Id}")
-                });
-            }
-
-            var keyboard = new Telegram.Bot.Types.ReplyMarkups.InlineKeyboardMarkup(buttons);
-
-            await _telegramBotService.SendMessageWithButtonsAsync(chatId, message, keyboard, cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            await _telegramBotService.SendMessageAsync(
-                chatId,
-                $"Error loading subscriptions: {ex.Message}",
-                cancellationToken);
-        }
+        // Platform subscriptions are no longer supported
+        await _telegramBotService.SendMessageAsync(
+            chatId,
+            "❌ Platform subscriptions are no longer supported. Please subscribe to individual models instead.",
+            cancellationToken);
     }
 
     private async Task HandlePhotosCommandAsync(long chatId, CancellationToken cancellationToken)
@@ -854,92 +878,6 @@ public partial class TelegramUpdateHandler
             await _telegramBotService.SendMessageAsync(
                 chatId,
                 $"Error loading photos: {ex.Message}",
-                cancellationToken);
-        }
-    }
-
-    private async Task HandleMySubscriptionCommandAsync(Guid userId, long chatId, CancellationToken cancellationToken)
-    {
-        var subscription = await _subscriptionService.GetActiveSubscriptionAsync(userId, cancellationToken);
-        if (subscription == null)
-        {
-            await _telegramBotService.SendMessageAsync(
-                chatId,
-                "You don't have an active subscription.",
-                cancellationToken);
-            return;
-        }
-
-        var message = $"Your subscription:\n" +
-                     $"Plan: {subscription.PlanName}\n" +
-                     $"Days remaining: {subscription.DaysRemaining}\n" +
-                     $"Expires: {subscription.EndDate:yyyy-MM-dd}";
-
-        await _telegramBotService.SendMessageAsync(chatId, message, cancellationToken);
-    }
-
-    private async Task HandleBuySubscriptionCommandAsync(Guid userId, string planIdStr, long chatId, CancellationToken cancellationToken)
-    {
-        try
-        {
-            if (!Guid.TryParse(planIdStr, out var planId))
-            {
-                await _telegramBotService.SendMessageAsync(
-                    chatId,
-                    "Invalid plan ID format. Please use a valid plan ID from /subscriptions",
-                    cancellationToken);
-                return;
-            }
-
-            // Get the subscription plan
-            var plan = await _subscriptionPlanRepository.GetByIdAsync(planId, cancellationToken);
-            if (plan == null || !plan.IsActive)
-            {
-                await _telegramBotService.SendMessageAsync(
-                    chatId,
-                    "Subscription plan not found or not available.",
-                    cancellationToken);
-                return;
-            }
-
-            // Create invoice for payment
-            var invoiceRequest = new Application.DTOs.CreateInvoiceRequest
-            {
-                ChatId = chatId,
-                Title = $"Subscription: {plan.Name}",
-                Description = $"{plan.Description} - {plan.DurationDays} days",
-                Payload = $"subscription_{plan.Id}_{userId}",
-                ProviderToken = "", // Empty for Telegram Stars
-                Currency = "XTR", // Telegram Stars currency
-                Amount = plan.Price.Amount,
-                Prices = new Dictionary<string, string>
-                {
-                    { plan.Name, plan.Price.Amount.ToString() }
-                }
-            };
-
-            var invoiceId = await _telegramBotService.CreateInvoiceAsync(invoiceRequest, cancellationToken);
-
-            if (invoiceId != null)
-            {
-                await _telegramBotService.SendMessageAsync(
-                    chatId,
-                    " Invoice created! Please complete the payment.",
-                    cancellationToken);
-            }
-            else
-            {
-                await _telegramBotService.SendMessageAsync(
-                    chatId,
-                    " Failed to create invoice. Please try again later.",
-                    cancellationToken);
-            }
-        }
-        catch (Exception ex)
-        {
-            await _telegramBotService.SendMessageAsync(
-                chatId,
-                $"Error processing request: {ex.Message}",
                 cancellationToken);
         }
     }
@@ -1273,15 +1211,10 @@ public partial class TelegramUpdateHandler
     // Public methods for callback handling
     public async Task HandleBuySubscriptionCallbackAsync(long telegramUserId, string planIdStr, long chatId, CancellationToken cancellationToken)
     {
-        // Get user from Telegram ID
-        var user = await _userService.GetUserByTelegramIdAsync(telegramUserId, cancellationToken);
-        if (user == null)
-        {
-            await _telegramBotService.SendMessageAsync(chatId, "User not found. Please send /start first.", cancellationToken);
-            return;
-        }
-
-        await HandleBuySubscriptionCommandAsync(user.Id, planIdStr, chatId, cancellationToken);
+        await _telegramBotService.SendMessageAsync(
+            chatId,
+            "❌ Platform subscriptions are no longer supported. Please subscribe to individual models instead.",
+            cancellationToken);
     }
 
     public async Task HandleBuyPhotoCallbackAsync(long telegramUserId, string photoIdStr, long chatId, CancellationToken cancellationToken)
@@ -1299,15 +1232,10 @@ public partial class TelegramUpdateHandler
 
     public async Task HandleTestBuySubscriptionCallbackAsync(long telegramUserId, string planIdStr, long chatId, CancellationToken cancellationToken)
     {
-        // Get user from Telegram ID
-        var user = await _userService.GetUserByTelegramIdAsync(telegramUserId, cancellationToken);
-        if (user == null)
-        {
-            await _telegramBotService.SendMessageAsync(chatId, "User not found. Please send /start first.", cancellationToken);
-            return;
-        }
-
-        await HandleTestBuySubscriptionAsync(user.Id, planIdStr, chatId, cancellationToken);
+        await _telegramBotService.SendMessageAsync(
+            chatId,
+            "❌ Platform subscriptions are no longer supported. Please subscribe to individual models instead.",
+            cancellationToken);
     }
 
     public async Task HandleTestBuyPhotoCallbackAsync(long telegramUserId, string photoIdStr, long chatId, CancellationToken cancellationToken)
@@ -1326,90 +1254,10 @@ public partial class TelegramUpdateHandler
     // Test methods for development (bypass payment)
     private async Task HandleTestBuySubscriptionAsync(Guid userId, string planIdStr, long chatId, CancellationToken cancellationToken)
     {
-        try
-        {
-            if (!Guid.TryParse(planIdStr, out var planId))
-            {
-                await _telegramBotService.SendMessageAsync(
-                    chatId,
-                    "Invalid plan ID format.",
-                    cancellationToken);
-                return;
-            }
-
-            // Get the subscription plan
-            var plan = await _subscriptionPlanRepository.GetByIdAsync(planId, cancellationToken);
-            if (plan == null || !plan.IsActive)
-            {
-                await _telegramBotService.SendMessageAsync(
-                    chatId,
-                    "Subscription plan not found or not available.",
-                    cancellationToken);
-                return;
-            }
-
-            // Create subscription request (bypassing payment)
-            var request = new Application.DTOs.CreateSubscriptionPurchaseRequest
-            {
-                UserId = userId,
-                SubscriptionPlanId = planId
-            };
-
-            var result = await _subscriptionService.CreateSubscriptionPurchaseAsync(request, cancellationToken);
-
-            if (result.IsSuccess)
-            {
-                // Mark the purchase as completed and activate subscription for testing
-                var purchase = await _purchaseRepository.GetByIdAsync(result.PurchaseId, cancellationToken);
-                if (purchase != null)
-                {
-                    purchase.MarkPaymentCompleted($"TEST_PAYMENT_{Guid.NewGuid()}", $"TEST_PRECHECK_{Guid.NewGuid()}");
-                    await _unitOfWork.SaveChangesAsync(cancellationToken);
-                }
-
-                var successMessage = "Test subscription created successfully!\n\n" +
-                                    $"Plan: {plan.Name}\n" +
-                                    $"Valid until: {DateTime.UtcNow.AddDays(plan.DurationDays):yyyy-MM-dd}\n" +
-                                    $"Days: {plan.DurationDays}\n\n" +
-                                    "You now have access to all content!";
-                
-                var successButtons = new List<List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>>
-                {
-                    new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
-                    {
-                        Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
-                            "View My Content",
-                            "menu_my_content"),
-                        Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
-                            "My Subscriptions",
-                            "menu_my_subscriptions")
-                    },
-                    new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
-                    {
-                        Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
-                            "<< Back to Main Menu",
-                            "menu_back_main")
-                    }
-                };
-                
-                var successKeyboard = new Telegram.Bot.Types.ReplyMarkups.InlineKeyboardMarkup(successButtons);
-                await _telegramBotService.SendMessageWithButtonsAsync(chatId, successMessage, successKeyboard, cancellationToken);
-            }
-            else
-            {
-                await _telegramBotService.SendMessageAsync(
-                    chatId,
-                    $" Failed to create subscription: {result.ErrorMessage}",
-                    cancellationToken);
-            }
-        }
-        catch (Exception ex)
-        {
-            await _telegramBotService.SendMessageAsync(
-                chatId,
-                $"Error: {ex.Message}",
-                cancellationToken);
-        }
+        await _telegramBotService.SendMessageAsync(
+            chatId,
+            "❌ Platform subscriptions are no longer supported. Please subscribe to individual models instead.",
+            cancellationToken);
     }
 
     private async Task HandleTestBuyPhotoAsync(Guid userId, string photoIdStr, long chatId, CancellationToken cancellationToken)
@@ -1817,7 +1665,10 @@ public partial class TelegramUpdateHandler
             {
                 var stats = await _modelDiscoveryService.GetModelStatisticsAsync(model.Id, cancellationToken);
                 
-                message += $"{model.DisplayName}\n";
+                // Use alias if available, otherwise use DisplayName
+                var displayText = !string.IsNullOrWhiteSpace(model.Alias) ? model.Alias : model.DisplayName;
+                
+                message += $"{displayText}\n";
                 if (!string.IsNullOrWhiteSpace(model.Bio))
                 {
                     message += $"   {model.Bio.Substring(0, Math.Min(80, model.Bio.Length))}\n";
@@ -1833,7 +1684,7 @@ public partial class TelegramUpdateHandler
                 buttons.Add(new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
                 {
                     Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
-                        $"View {model.DisplayName}",
+                        $"View {displayText}",
                         $"view_model_{model.Id}")
                 });
             }
@@ -1887,7 +1738,11 @@ public partial class TelegramUpdateHandler
             // Check if user has active subscription
             var hasSubscription = await _modelSubscriptionService.HasActiveSubscriptionAsync(userId, modelId, cancellationToken);
 
-            var message = $"📊 {model.DisplayName}\n\n";
+            // Use alias if available, otherwise use DisplayName
+            var displayText = !string.IsNullOrWhiteSpace(model.Alias) ? model.Alias : model.DisplayName;
+            
+            var message = $"📊 {displayText}\n\n";
+            
             if (!string.IsNullOrWhiteSpace(model.Bio))
             {
                 message += $"{model.Bio}\n\n";
@@ -2002,7 +1857,12 @@ public partial class TelegramUpdateHandler
 
             if (!photosList.Any())
             {
-                var noContentMsg = $"📭 {model.DisplayName} hasn't uploaded any content yet.\n\n" +
+                // Use alias if available, otherwise use DisplayName
+                var modelDisplayText = !string.IsNullOrWhiteSpace(model.Alias) 
+                    ? model.Alias 
+                    : model.DisplayName;
+                
+                var noContentMsg = $"📭 {modelDisplayText} hasn't uploaded any content yet.\n\n" +
                                   "Check back later!";
                 var backButton = new List<List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>>
                 {
@@ -2018,7 +1878,12 @@ public partial class TelegramUpdateHandler
                 return;
             }
 
-            var message = $"📂 {model.DisplayName}'s Content\n\n";
+            // Use alias if available, otherwise use DisplayName
+            var displayText = !string.IsNullOrWhiteSpace(model.Alias) 
+                ? model.Alias 
+                : model.DisplayName;
+            
+            var message = $"📂 {displayText}'s Content\n\n";
             message += $"✅ You have access to all {photosList.Count} premium photos!\n\n";
             message += "Select a photo to view:\n\n";
 
@@ -2096,7 +1961,12 @@ public partial class TelegramUpdateHandler
 
             if (!demoList.Any())
             {
-                var noContentMsg = $"📭 {model.DisplayName} hasn't uploaded any demo content yet.";
+                // Use alias if available, otherwise use DisplayName
+                var modelDisplayText = !string.IsNullOrWhiteSpace(model.Alias) 
+                    ? model.Alias 
+                    : model.DisplayName;
+                
+                var noContentMsg = $"📭 {modelDisplayText} hasn't uploaded any demo content yet.";
                 var backButton = new List<List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>>
                 {
                     new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
@@ -2116,7 +1986,12 @@ public partial class TelegramUpdateHandler
             
             if (demoAccess != null)
             {
-                var alreadyViewedMsg = $"🎁 {model.DisplayName}'s Free Demo\n\n" +
+                // Use alias if available, otherwise use DisplayName
+                var modelDisplayText = !string.IsNullOrWhiteSpace(model.Alias) 
+                    ? model.Alias 
+                    : model.DisplayName;
+                
+                var alreadyViewedMsg = $"🎁 {modelDisplayText}'s Free Demo\n\n" +
                                       "❌ You've already viewed the free demo content for this model.\n\n" +
                                       "To see more content, subscribe or purchase individual photos!";
                 
@@ -2142,7 +2017,12 @@ public partial class TelegramUpdateHandler
                 ? demoPhoto.FileInfo.FilePath 
                 : demoPhoto.FileInfo.FileId;
 
-            var caption = $"🎁 Free Demo from {model.DisplayName}\n\n";
+            // Use alias if available, otherwise use DisplayName
+            var displayTextForCaption = !string.IsNullOrWhiteSpace(model.Alias) 
+                ? model.Alias 
+                : model.DisplayName;
+            
+            var caption = $"🎁 Free Demo from {displayTextForCaption}\n\n";
             if (!string.IsNullOrWhiteSpace(demoPhoto.Caption))
             {
                 caption += $"{demoPhoto.Caption}\n\n";
@@ -2372,8 +2252,14 @@ public partial class TelegramUpdateHandler
 
             var stats = await _modelDiscoveryService.GetModelStatisticsAsync(model.Id, cancellationToken);
 
-            var message = $"📊 Model Dashboard: {model.DisplayName}\n\n" +
-                         $"👥 Subscribers: {stats.TotalSubscribers}\n" +
+            // Use alias if available, otherwise use DisplayName
+            var modelDisplayText = !string.IsNullOrWhiteSpace(model.Alias) 
+                ? model.Alias 
+                : model.DisplayName;
+            
+            var message = $"📊 Model Dashboard: {modelDisplayText}\n\n";
+            
+            message += $"👥 Subscribers: {stats.TotalSubscribers}\n" +
                          $"📸 Premium Content: {stats.PremiumPhotos}\n" +
                          $"🎁 Demo Content: {stats.DemoPhotos}\n";
 
@@ -2410,7 +2296,18 @@ public partial class TelegramUpdateHandler
                     "model_edit_content")
             });
 
-            // Row 3: Subscription Management
+            // Row 3: Profile Settings
+            var aliasButtonText = string.IsNullOrWhiteSpace(model.Alias) 
+                ? "🏷️ Set Alias" 
+                : "🏷️ Change Alias";
+            buttons.Add(new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
+            {
+                Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
+                    aliasButtonText,
+                    "model_set_alias")
+            });
+
+            // Row 4: Subscription Management
             buttons.Add(new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
             {
                 Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
@@ -2418,7 +2315,7 @@ public partial class TelegramUpdateHandler
                     "model_manage_subscription")
             });
 
-            // Row 4: Back button
+            // Row 5: Back button
             buttons.Add(new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
             {
                 Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
@@ -2546,7 +2443,9 @@ public partial class TelegramUpdateHandler
                         ? $"@{user.Username}" 
                         : "No username";
                     
-                    var displayName = model.DisplayName;
+                    // Use alias if available, otherwise use DisplayName
+                    var displayName = !string.IsNullOrWhiteSpace(model.Alias) ? model.Alias : model.DisplayName;
+                    
                     message += $"👤 {displayName}\n";
                     message += $"   User: {userName}\n";
                     message += $"   Telegram: {usernameLink}\n";
@@ -2628,6 +2527,16 @@ public partial class TelegramUpdateHandler
                 Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
                     "🌐 Web Setup",
                     "mtproto_web_setup")
+            });
+            
+            // Single Model Mode Settings
+            var isSingleModelMode = await _singleModelModeService.IsSingleModelModeAsync(cancellationToken);
+            var singleModeStatus = isSingleModelMode ? "✅ Enabled" : "❌ Disabled";
+            buttons.Add(new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
+            {
+                Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
+                    $"🎯 Single Model Mode ({singleModeStatus})",
+                    "admin_single_model_settings")
             });
 
             // MTProto Settings (Individual)
@@ -2803,7 +2712,12 @@ public partial class TelegramUpdateHandler
             var hasSubscription = await _modelSubscriptionService.HasActiveSubscriptionAsync(userId, modelId, cancellationToken);
             if (hasSubscription)
             {
-                await _telegramBotService.SendMessageAsync(chatId, $" You already have an active subscription to {model.DisplayName}!", cancellationToken);
+                // Use alias if available, otherwise use DisplayName
+                var modelDisplayText = !string.IsNullOrWhiteSpace(model.Alias) 
+                    ? model.Alias 
+                    : model.DisplayName;
+                
+                await _telegramBotService.SendMessageAsync(chatId, $" You already have an active subscription to {modelDisplayText}!", cancellationToken);
                 return;
             }
 
@@ -2814,12 +2728,17 @@ public partial class TelegramUpdateHandler
                 model.SubscriptionPrice!,
                 cancellationToken);
 
+            // Use alias if available, otherwise use DisplayName
+            var displayText = !string.IsNullOrWhiteSpace(model.Alias) 
+                ? model.Alias 
+                : model.DisplayName;
+            
             await _telegramBotService.SendMessageAsync(
                 chatId,
-                $" Successfully subscribed to {model.DisplayName}!\n\n" +
+                $" Successfully subscribed to {displayText}!\n\n" +
                 $"Duration: {model.SubscriptionDurationDays} days\n" +
                 $"Expires: {subscription.SubscriptionPeriod.EndDate:d}\n\n" +
-                $" You now have access to all of {model.DisplayName}'s premium content!",
+                $" You now have access to all of {displayText}'s premium content!",
                 cancellationToken);
         }
         catch (Exception ex)
@@ -3623,6 +3542,341 @@ public partial class TelegramUpdateHandler
         catch (Exception ex)
         {
             await _telegramBotService.SendMessageAsync(chatId, $"Error: {ex.Message}", cancellationToken);
+        }
+    }
+
+    #endregion
+
+    #region Contact Verification Helpers
+
+    /// <summary>
+    /// Sends admin notification for manual contact add requirement
+    /// </summary>
+    private async Task SendAdminNotificationAsync(string message, CancellationToken cancellationToken)
+    {
+        try
+        {
+            // Get admin IDs from platform settings
+            var adminIdsString = await _platformSettingsRepository.GetValueAsync("admin:user_ids", cancellationToken);
+            
+            if (string.IsNullOrWhiteSpace(adminIdsString))
+            {
+                Console.WriteLine("⚠️ No admin IDs configured in platform settings");
+                return;
+            }
+
+            // Parse comma-separated admin IDs
+            var adminIds = adminIdsString.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                .Select(id => long.TryParse(id.Trim(), out var telegramId) ? telegramId : (long?)null)
+                .Where(id => id.HasValue)
+                .Select(id => id!.Value)
+                .ToList();
+
+            if (!adminIds.Any())
+            {
+                Console.WriteLine("⚠️ No valid admin IDs found");
+                return;
+            }
+
+            // Send to all admins
+            foreach (var adminId in adminIds)
+            {
+                try
+                {
+                    await _telegramBotService.SendMessageAsync(
+                        adminId,
+                        message,
+                        cancellationToken);
+                    
+                    Console.WriteLine($"✅ Admin notification sent to {adminId}");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"⚠️ Failed to send admin notification to {adminId}: {ex.Message}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Error sending admin notifications: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Handles contact verification result and notifies admin if needed
+    /// </summary>
+    private async Task HandleContactVerificationResultAsync(
+        ContentDeliveryResult deliveryResult,
+        long userChatId,
+        CancellationToken cancellationToken)
+    {
+        if (deliveryResult.VerificationResult == null)
+        {
+            return;
+        }
+
+        var verificationResult = deliveryResult.VerificationResult;
+
+        // Send instruction message to user
+        if (!string.IsNullOrWhiteSpace(verificationResult.UserInstructionMessage))
+        {
+            await _telegramBotService.SendMessageAsync(
+                userChatId,
+                verificationResult.UserInstructionMessage,
+                cancellationToken);
+        }
+
+        // Notify admin if needed
+        if (verificationResult.ShouldNotifyAdmin && 
+            !string.IsNullOrWhiteSpace(verificationResult.AdminNotificationMessage))
+        {
+            await SendAdminNotificationAsync(verificationResult.AdminNotificationMessage, cancellationToken);
+        }
+    }
+
+    #endregion
+    
+    #region Single Model Mode Admin Methods
+
+    /// <summary>
+    /// Shows Single Model Mode settings menu
+    /// </summary>
+    private async Task HandleAdminSingleModelSettingsAsync(Guid userId, long chatId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var isAdmin = await _authorizationService.IsAdminAsync(userId, cancellationToken);
+            if (!isAdmin)
+            {
+                await _telegramBotService.SendMessageAsync(chatId, "❌ You don't have admin permissions.", cancellationToken);
+                return;
+            }
+
+            var isSingleModelMode = await _singleModelModeService.IsSingleModelModeAsync(cancellationToken);
+            var defaultModel = await _singleModelModeService.GetDefaultModelAsync(cancellationToken);
+
+            var message = "🎯 Single Model Mode Settings\n\n";
+            
+            if (isSingleModelMode && defaultModel != null)
+            {
+                // Use alias if available, otherwise use DisplayName
+                var modelDisplayText = !string.IsNullOrWhiteSpace(defaultModel.Alias) 
+                    ? defaultModel.Alias 
+                    : defaultModel.DisplayName;
+                
+                message += $"✅ Status: Enabled\n";
+                message += $"📸 Active Model: {modelDisplayText}\n";
+                message += $"👤 Bio: {defaultModel.Bio ?? "No bio"}\n\n";
+                message += "In Single Model Mode:\n";
+                message += "• Users see only this model's content\n";
+                message += "• Browse Models option is hidden\n";
+                message += "• New model registrations are hidden\n\n";
+                message += "Choose an action:";
+            }
+            else
+            {
+                message += $"❌ Status: Disabled\n\n";
+                message += "Single Model Mode allows your bot to operate exclusively for one content creator.\n\n";
+                message += "Benefits:\n";
+                message += "• Simplified user experience\n";
+                message += "• Direct access to model's content\n";
+                message += "• Perfect for individual creators\n\n";
+                message += "Choose a model to enable:";
+            }
+
+            var buttons = new List<List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>>();
+
+            if (isSingleModelMode && defaultModel != null)
+            {
+                // Disable button
+                buttons.Add(new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
+                {
+                    Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
+                        "❌ Disable Single Model Mode",
+                        "admin_single_model_disable")
+                });
+            }
+            else
+            {
+                // Show all approved models to choose from
+                var allModels = await _modelService.GetApprovedModelsAsync(cancellationToken);
+                var modelsList = allModels.ToList();
+
+                if (modelsList.Any())
+                {
+                    foreach (var model in modelsList.Take(10))
+                    {
+                        // Use alias if available, otherwise use DisplayName
+                        var modelDisplayText = !string.IsNullOrWhiteSpace(model.Alias) 
+                            ? model.Alias 
+                            : model.DisplayName;
+                        
+                        buttons.Add(new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
+                        {
+                            Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
+                                $"✅ Enable for: {modelDisplayText}",
+                                $"admin_single_model_enable_{model.Id}")
+                        });
+                    }
+                }
+                else
+                {
+                    message += "\n⚠️ No approved models available.";
+                }
+            }
+
+            // Back button
+            buttons.Add(new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
+            {
+                Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
+                    "<< Back to Settings",
+                    "admin_settings")
+            });
+
+            var keyboard = new Telegram.Bot.Types.ReplyMarkups.InlineKeyboardMarkup(buttons);
+            await _telegramBotService.SendMessageWithButtonsAsync(chatId, message, keyboard, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            await _telegramBotService.SendMessageAsync(chatId, $"❌ Error: {ex.Message}", cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// Enables Single Model Mode for a specific model
+    /// </summary>
+    private async Task HandleAdminEnableSingleModelModeAsync(Guid userId, Guid modelId, long chatId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var isAdmin = await _authorizationService.IsAdminAsync(userId, cancellationToken);
+            if (!isAdmin)
+            {
+                await _telegramBotService.SendMessageAsync(chatId, "❌ You don't have admin permissions.", cancellationToken);
+                return;
+            }
+
+            await _singleModelModeService.EnableSingleModelModeAsync(modelId, cancellationToken);
+            
+            var model = await _modelRepository.GetByIdAsync(modelId, cancellationToken);
+            
+            // Use alias if available, otherwise use DisplayName
+            var modelDisplayText = model != null && !string.IsNullOrWhiteSpace(model.Alias) 
+                ? model.Alias 
+                : model?.DisplayName ?? "Unknown";
+            
+            var successMessage = $"✅ Single Model Mode Enabled!\n\n" +
+                                $"📸 Active Model: {modelDisplayText}\n\n" +
+                                "The bot will now operate exclusively for this model.\n" +
+                                "Users will see their content directly on the main menu.";
+
+            var buttons = new List<List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>>
+            {
+                new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
+                {
+                    Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
+                        "⚙️ Single Model Settings",
+                        "admin_single_model_settings")
+                },
+                new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
+                {
+                    Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
+                        "<< Back to Main Menu",
+                        "menu_back_main")
+                }
+            };
+
+            var keyboard = new Telegram.Bot.Types.ReplyMarkups.InlineKeyboardMarkup(buttons);
+            await _telegramBotService.SendMessageWithButtonsAsync(chatId, successMessage, keyboard, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            await _telegramBotService.SendMessageAsync(chatId, $"❌ Error enabling Single Model Mode: {ex.Message}", cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// Disables Single Model Mode
+    /// </summary>
+    private async Task HandleAdminDisableSingleModelModeAsync(Guid userId, long chatId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var isAdmin = await _authorizationService.IsAdminAsync(userId, cancellationToken);
+            if (!isAdmin)
+            {
+                await _telegramBotService.SendMessageAsync(chatId, "❌ You don't have admin permissions.", cancellationToken);
+                return;
+            }
+
+            await _singleModelModeService.DisableSingleModelModeAsync(cancellationToken);
+            
+            var successMessage = "✅ Single Model Mode Disabled!\n\n" +
+                                "The bot will now show all models.\n" +
+                                "Users can browse and subscribe to multiple creators.";
+
+            var buttons = new List<List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>>
+            {
+                new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
+                {
+                    Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
+                        "⚙️ Single Model Settings",
+                        "admin_single_model_settings")
+                },
+                new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
+                {
+                    Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
+                        "<< Back to Main Menu",
+                        "menu_back_main")
+                }
+            };
+
+            var keyboard = new Telegram.Bot.Types.ReplyMarkups.InlineKeyboardMarkup(buttons);
+            await _telegramBotService.SendMessageWithButtonsAsync(chatId, successMessage, keyboard, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            await _telegramBotService.SendMessageAsync(chatId, $"❌ Error disabling Single Model Mode: {ex.Message}", cancellationToken);
+        }
+    }
+
+    #endregion
+
+    #region Model Alias Methods
+
+    /// <summary>
+    /// Prompts model to set their alias
+    /// </summary>
+    private async Task HandleModelSetAliasPromptAsync(Guid userId, long chatId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var model = await _modelService.GetModelByUserIdAsync(userId, cancellationToken);
+            if (model == null)
+            {
+                await _telegramBotService.SendMessageAsync(chatId, "❌ You are not registered as a model.", cancellationToken);
+                return;
+            }
+
+            var message = "🏷️ Set Your Alias\n\n";
+            
+            if (!string.IsNullOrWhiteSpace(model.Alias))
+            {
+                message += $"Current alias: {model.Alias}\n\n";
+            }
+            
+            message += "An alias is a friendly nickname that will be displayed alongside your display name.\n\n" +
+                      "✨ Examples: \"The Artist\", \"Photography Pro\", \"Creative Soul\"\n\n" +
+                      "Send me your desired alias, or send /cancel to go back.\n" +
+                      "💡 Tip: Send \"clear\" to remove your current alias.";
+
+            await _userStateRepository.SetStateAsync(userId, Domain.Enums.UserStateType.SettingModelAlias, null, cancellationToken: cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+            await _telegramBotService.SendMessageAsync(chatId, message, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            await _telegramBotService.SendMessageAsync(chatId, $"❌ Error: {ex.Message}", cancellationToken);
         }
     }
 

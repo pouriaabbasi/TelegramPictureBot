@@ -26,6 +26,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<MtProtoAccessToken> MtProtoAccessTokens => Set<MtProtoAccessToken>();
     public DbSet<UserContactVerification> UserContactVerifications => Set<UserContactVerification>();
     public DbSet<ModelTermsAcceptance> ModelTermsAcceptances => Set<ModelTermsAcceptance>();
+    public DbSet<ModelPayout> ModelPayouts => Set<ModelPayout>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -45,6 +46,7 @@ public class ApplicationDbContext : DbContext
         modelBuilder.Entity<PlatformSettings>().HasQueryFilter(ps => !ps.IsDeleted);
         modelBuilder.Entity<UserContactVerification>().HasQueryFilter(ucv => !ucv.IsDeleted);
         modelBuilder.Entity<ModelTermsAcceptance>().HasQueryFilter(mta => !mta.IsDeleted);
+        modelBuilder.Entity<ModelPayout>().HasQueryFilter(mp => !mp.IsDeleted);
     }
 
     public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)

@@ -38,6 +38,7 @@ public partial class TelegramUpdateHandler
     private readonly IMtProtoAccessTokenService _mtProtoAccessTokenService;
     private readonly IServiceProvider _serviceProvider;
     private readonly ISingleModelModeService _singleModelModeService;
+    private readonly IModelTermsService _modelTermsService;
 
     public TelegramUpdateHandler(
         IUserService userService,
@@ -62,7 +63,8 @@ public partial class TelegramUpdateHandler
         IMtProtoService mtProtoService,
         IMtProtoAccessTokenService mtProtoAccessTokenService,
         IServiceProvider serviceProvider,
-        ISingleModelModeService singleModelModeService)
+        ISingleModelModeService singleModelModeService,
+        IModelTermsService modelTermsService)
     {
         _userService = userService ?? throw new ArgumentNullException(nameof(userService));
         _contentAuthorizationService = contentAuthorizationService ?? throw new ArgumentNullException(nameof(contentAuthorizationService));
@@ -87,6 +89,7 @@ public partial class TelegramUpdateHandler
         _mtProtoAccessTokenService = mtProtoAccessTokenService ?? throw new ArgumentNullException(nameof(mtProtoAccessTokenService));
         _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
         _singleModelModeService = singleModelModeService ?? throw new ArgumentNullException(nameof(singleModelModeService));
+        _modelTermsService = modelTermsService ?? throw new ArgumentNullException(nameof(modelTermsService));
     }
 
     /// <summary>
@@ -566,6 +569,13 @@ public partial class TelegramUpdateHandler
                 {
                     // No need for modelId, we use the userId to find their rejected model
                     await HandleReapplyModelAsync(user.Id, chatId, cancellationToken);
+                }
+                break;
+
+            case "terms":
+                if (secondPart == "accept" && parts.Length > 2 && Guid.TryParse(parts[2], out var termsUserId))
+                {
+                    await HandleTermsAcceptanceAsync(termsUserId, chatId, cancellationToken);
                 }
                 break;
 
@@ -2172,6 +2182,55 @@ public partial class TelegramUpdateHandler
                 return;
             }
 
+            // Show Terms & Conditions before proceeding with registration
+            await ShowModelTermsAndConditionsAsync(userId, chatId, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Error in become model flow: {ex.Message}");
+            await _telegramBotService.SendMessageAsync(chatId, $"Error: {ex.Message}", cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// Shows Terms and Conditions for model registration
+    /// </summary>
+    private async Task ShowModelTermsAndConditionsAsync(Guid userId, long chatId, CancellationToken cancellationToken)
+    {
+        var termsContent = _modelTermsService.GetTermsContent();
+        
+        var buttons = new List<List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>>
+        {
+            new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
+            {
+                Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
+                    "✅ قبول و ادامه",
+                    $"terms_accept_{userId}"),
+                Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
+                    "❌ انصراف",
+                    "menu_back_main")
+            }
+        };
+        
+        var keyboard = new Telegram.Bot.Types.ReplyMarkups.InlineKeyboardMarkup(buttons);
+        await _telegramBotService.SendMessageWithButtonsAsync(chatId, termsContent, keyboard, cancellationToken);
+    }
+
+    /// <summary>
+    /// Handles terms acceptance and proceeds with model registration
+    /// </summary>
+    private async Task HandleTermsAcceptanceAsync(Guid userId, long chatId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            // Get user info
+            var user = await _userRepository.GetByIdAsync(userId, cancellationToken);
+            if (user == null)
+            {
+                await _telegramBotService.SendMessageAsync(chatId, "User not found.", cancellationToken);
+                return;
+            }
+
             var displayName = $"{user.FirstName} {user.LastName}".Trim();
             if (string.IsNullOrWhiteSpace(displayName))
             {
@@ -2180,8 +2239,11 @@ public partial class TelegramUpdateHandler
 
             // Register the model
             var model = await _modelService.RegisterModelAsync(userId, displayName, "New content creator", cancellationToken);
+            
+            // Record terms acceptance
+            await _modelTermsService.RecordAcceptanceAsync(model.Id, cancellationToken);
 
-            var successMessage = "Model registration submitted successfully!\n\n" +
+            var successMessage = "✅ Model registration submitted successfully!\n\n" +
                                 $"Display Name: {model.DisplayName}\n\n" +
                                 "⏳ Your application is now pending admin approval.\n\n" +
                                 "An admin will review your application and you'll be notified once approved. " +
@@ -2196,7 +2258,7 @@ public partial class TelegramUpdateHandler
                 new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
                 {
                     Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
-                        "<< Back to Main Menu",
+                        "« Back to Main Menu",
                         "menu_back_main")
                 }
             };

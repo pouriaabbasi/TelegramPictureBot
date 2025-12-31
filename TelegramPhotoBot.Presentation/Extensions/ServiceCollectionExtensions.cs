@@ -24,6 +24,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IContactVerificationService, ContactVerificationService>();
         services.AddScoped<ISingleModelModeService, SingleModelModeService>();
         services.AddScoped<IModelTermsService, ModelTermsService>();
+        services.AddScoped<IRevenueAnalyticsService, RevenueAnalyticsService>();
 
         // Marketplace Services
         services.AddScoped<IAuthorizationService, AuthorizationService>();
@@ -65,6 +66,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IPlatformSettingsRepository, PlatformSettingsRepository>();
         services.AddScoped<IUserContactVerificationRepository, UserContactVerificationRepository>();
         services.AddScoped<IModelTermsAcceptanceRepository, ModelTermsAcceptanceRepository>();
+        services.AddScoped<IModelPayoutRepository, ModelPayoutRepository>();
 
         // Telegram Services - Bot Token MUST be in appsettings.json (required for bootstrapping)
         var botToken = configuration["Telegram:BotToken"] 

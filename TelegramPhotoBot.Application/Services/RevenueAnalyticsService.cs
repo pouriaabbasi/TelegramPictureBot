@@ -3,210 +3,145 @@ using TelegramPhotoBot.Application.Interfaces;
 using TelegramPhotoBot.Application.Interfaces.Repositories;
 using TelegramPhotoBot.Domain.Entities;
 using TelegramPhotoBot.Domain.Enums;
+using System;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace TelegramPhotoBot.Application.Services;
 
 public class RevenueAnalyticsService : IRevenueAnalyticsService
 {
+    private readonly IModelRepository _modelRepository;
     private readonly IPhotoRepository _photoRepository;
     private readonly IPurchaseRepository _purchaseRepository;
-    private readonly IModelPayoutRepository _payoutRepository;
-    private readonly IModelSubscriptionRepository _subscriptionRepository;
+    private readonly IModelSubscriptionRepository _modelSubscriptionRepository;
+    private readonly IModelPayoutRepository _modelPayoutRepository;
 
     public RevenueAnalyticsService(
+        IModelRepository modelRepository,
         IPhotoRepository photoRepository,
         IPurchaseRepository purchaseRepository,
-        IModelPayoutRepository payoutRepository,
-        IModelSubscriptionRepository subscriptionRepository)
+        IModelSubscriptionRepository modelSubscriptionRepository,
+        IModelPayoutRepository modelPayoutRepository)
     {
-        _photoRepository = photoRepository;
-        _purchaseRepository = purchaseRepository;
-        _payoutRepository = payoutRepository;
-        _subscriptionRepository = subscriptionRepository;
+        _modelRepository = modelRepository ?? throw new ArgumentNullException(nameof(modelRepository));
+        _photoRepository = photoRepository ?? throw new ArgumentNullException(nameof(photoRepository));
+        _purchaseRepository = purchaseRepository ?? throw new ArgumentNullException(nameof(purchaseRepository));
+        _modelSubscriptionRepository = modelSubscriptionRepository ?? throw new ArgumentNullException(nameof(modelSubscriptionRepository));
+        _modelPayoutRepository = modelPayoutRepository ?? throw new ArgumentNullException(nameof(modelPayoutRepository));
     }
 
-    public async Task<ModelRevenueDto> GetModelRevenueAsync(Guid modelId, CancellationToken cancellationToken = default)
+    public async Task<RevenueAnalyticsDto> GetModelRevenueAnalyticsAsync(Guid modelId, CancellationToken cancellationToken = default)
     {
-        // Get all purchases for this model's content
+        var model = await _modelRepository.GetByIdAsync(modelId, cancellationToken);
+        if (model == null)
+        {
+            throw new ArgumentException($"Model with ID {modelId} not found.");
+        }
+
+        var allPhotos = await _photoRepository.GetAllAsync(cancellationToken);
+        var photos = allPhotos.Where(p => p.ModelId == modelId).ToList();
+        
         var allPurchases = await _purchaseRepository.GetAllAsync(cancellationToken);
-        var modelPurchases = allPurchases
-            .OfType<PurchasePhoto>()
-            .Where(p => p.Photo.ModelId == modelId && p.PaymentStatus == PaymentStatus.Completed)
+        var purchases = allPurchases
+            .Where(p => p is PurchasePhoto pp && pp.Photo.ModelId == modelId)
             .ToList();
-
-        var totalRevenue = modelPurchases.Sum(p => p.Amount.Amount);
         
-        var now = DateTime.UtcNow;
-        var startOfMonth = new DateTime(now.Year, now.Month, 1);
-        var startOfToday = now.Date;
+        var subscriptions = (await _modelSubscriptionRepository.GetModelSubscriptionsAsync(modelId, cancellationToken)).ToList();
+        var payouts = (await _modelPayoutRepository.GetModelPayoutsAsync(modelId, cancellationToken)).ToList();
 
-        var revenueThisMonth = modelPurchases
-            .Where(p => p.PurchaseDate >= startOfMonth)
-            .Sum(p => p.Amount.Amount);
+        var totalRevenue = purchases.Sum(p => p.Amount.Amount) + subscriptions.Sum(s => s.Amount.Amount);
+        var thisMonthRevenue = purchases.Where(p => p.PurchaseDate.Month == DateTime.UtcNow.Month && p.PurchaseDate.Year == DateTime.UtcNow.Year).Sum(p => p.Amount.Amount) +
+                               subscriptions.Where(s => s.PurchaseDate.Month == DateTime.UtcNow.Month && s.PurchaseDate.Year == DateTime.UtcNow.Year).Sum(s => s.Amount.Amount);
+        var todayRevenue = purchases.Where(p => p.PurchaseDate.Date == DateTime.UtcNow.Date).Sum(p => p.Amount.Amount) +
+                           subscriptions.Where(s => s.PurchaseDate.Date == DateTime.UtcNow.Date).Sum(s => s.Amount.Amount);
 
-        var revenueToday = modelPurchases
-            .Where(p => p.PurchaseDate >= startOfToday)
-            .Sum(p => p.Amount.Amount);
+        var totalPayouts = payouts.Where(p => p.Status == PayoutStatus.Completed).Sum(p => p.AmountStars);
+        var availableBalance = totalRevenue - totalPayouts;
 
-        var totalPaidOut = await _payoutRepository.GetTotalPaidAmountAsync(modelId, cancellationToken);
-        var availableBalance = totalRevenue - totalPaidOut;
+        var totalViews = photos.Sum(p => p.ViewCount);
+        var totalPurchases = purchases.Count;
+        var conversionRate = totalViews > 0 ? (decimal)totalPurchases / totalViews * 100 : 0;
 
-        var totalSubscribers = (await _subscriptionRepository.GetUserActiveSubscriptionsAsync(modelId, cancellationToken)).Count();
-        var totalSales = modelPurchases.Count;
-
-        var avgSalePrice = totalSales > 0 ? (decimal)totalRevenue / totalSales : 0;
-
-        // Get all photos for view count
-        var allPhotos = await _photoRepository.GetAllAsync(cancellationToken);
-        var modelPhotos = allPhotos.Where(p => p.ModelId == modelId).ToList();
-        var totalViews = modelPhotos.Sum(p => p.ViewCount);
-
-        var conversionRate = totalViews > 0 ? (decimal)totalSales / totalViews * 100 : 0;
-
-        var latestPayout = await _payoutRepository.GetLatestPayoutAsync(modelId, cancellationToken);
-        
-        // Next payout date: 1st of next month
-        var nextPayoutDate = startOfMonth.AddMonths(1);
-
-        return new ModelRevenueDto
+        var contentStats = photos.Select(p =>
         {
-            ModelId = modelId,
-            TotalRevenue = totalRevenue,
-            RevenueThisMonth = revenueThisMonth,
-            RevenueToday = revenueToday,
-            AvailableBalance = availableBalance,
-            TotalPaidOut = totalPaidOut,
-            TotalSubscribers = totalSubscribers,
-            TotalSales = totalSales,
-            AverageSalePrice = avgSalePrice,
-            ConversionRate = conversionRate,
-            LastPayoutDate = latestPayout?.CompletedAt,
-            NextPayoutDate = nextPayoutDate
-        };
-    }
+            var contentPurchases = purchases.Where(pr => pr is PurchasePhoto pp && pp.PhotoId == p.Id).ToList();
+            var contentRevenue = contentPurchases.Sum(pr => pr.Amount.Amount);
+            var contentConversionRate = p.ViewCount > 0 ? (decimal)contentPurchases.Count / p.ViewCount * 100 : 0;
 
-    public async Task<IEnumerable<ContentStatisticsDto>> GetContentStatisticsAsync(Guid modelId, CancellationToken cancellationToken = default)
-    {
-        var allPhotos = await _photoRepository.GetAllAsync(cancellationToken);
-        var modelPhotos = allPhotos.Where(p => p.ModelId == modelId && p.Type == PhotoType.Premium).ToList();
-
-        var allPurchases = await _purchaseRepository.GetAllAsync(cancellationToken);
-        var photoPurchases = allPurchases.OfType<PurchasePhoto>()
-            .Where(p => p.PaymentStatus == PaymentStatus.Completed)
-            .GroupBy(p => p.PhotoId)
-            .ToDictionary(g => g.Key, g => new { Count = g.Count(), Revenue = g.Sum(p => p.Amount.Amount) });
-
-        var statistics = new List<ContentStatisticsDto>();
-
-        foreach (var photo in modelPhotos)
-        {
-            var purchaseData = photoPurchases.ContainsKey(photo.Id) 
-                ? photoPurchases[photo.Id] 
-                : new { Count = 0, Revenue = 0L };
-
-            var conversionRate = photo.ViewCount > 0 
-                ? (decimal)purchaseData.Count / photo.ViewCount * 100 
-                : 0;
-
-            statistics.Add(new ContentStatisticsDto
+            return new ContentStatsDto
             {
-                ContentId = photo.Id,
-                ContentType = "Photo",
-                Title = photo.Caption ?? "Untitled",
-                ViewCount = photo.ViewCount,
-                PurchaseCount = purchaseData.Count,
-                TotalRevenue = purchaseData.Revenue,
-                ConversionRate = conversionRate,
-                Price = photo.Price.Amount,
-                CreatedAt = photo.CreatedAt
-            });
-        }
+                ContentId = p.Id,
+                ContentName = p.Caption ?? $"Photo {p.Id.ToString().Substring(0, 8)}",
+                Views = p.ViewCount,
+                Purchases = contentPurchases.Count,
+                RevenueStars = contentRevenue,
+                ConversionRate = contentConversionRate
+            };
+        }).ToList();
 
-        return statistics.OrderByDescending(s => s.TotalRevenue);
-    }
-
-    public async Task<IEnumerable<TopContentDto>> GetTopContentAsync(
-        Guid modelId, 
-        int topCount = 10,
-        DateTime? startDate = null,
-        DateTime? endDate = null,
-        CancellationToken cancellationToken = default)
-    {
-        var statistics = await GetContentStatisticsAsync(modelId, cancellationToken);
-        
-        // Filter by date if provided
-        if (startDate.HasValue || endDate.HasValue)
-        {
-            var start = startDate ?? DateTime.MinValue;
-            var end = endDate ?? DateTime.MaxValue;
-            
-            statistics = statistics.Where(s => s.CreatedAt >= start && s.CreatedAt <= end);
-        }
-
-        var topContent = statistics
-            .OrderByDescending(s => s.PurchaseCount)
-            .ThenByDescending(s => s.TotalRevenue)
-            .Take(topCount)
-            .Select((s, index) => new TopContentDto
+        var topMonthlyContent = contentStats
+            .Where(c => purchases.Any(p => p is PurchasePhoto pp && pp.PhotoId == c.ContentId && p.PurchaseDate.Month == DateTime.UtcNow.Month && p.PurchaseDate.Year == DateTime.UtcNow.Year))
+            .OrderByDescending(c => c.Purchases)
+            .Take(10)
+            .Select(c => new TopContentDto
             {
-                ContentId = s.ContentId,
-                ContentType = s.ContentType,
-                Title = s.Title,
-                ViewCount = s.ViewCount,
-                PurchaseCount = s.PurchaseCount,
-                TotalRevenue = s.TotalRevenue,
-                ConversionRate = s.ConversionRate,
-                Rank = index + 1
-            });
+                ContentId = c.ContentId,
+                ContentName = c.ContentName,
+                MetricValue = c.Purchases,
+                MetricType = "Sales"
+            }).ToList();
 
-        return topContent;
-    }
+        var topYearlyContent = contentStats
+            .Where(c => purchases.Any(p => p is PurchasePhoto pp && pp.PhotoId == c.ContentId && p.PurchaseDate.Year == DateTime.UtcNow.Year))
+            .OrderByDescending(c => c.Purchases)
+            .Take(10)
+            .Select(c => new TopContentDto
+            {
+                ContentId = c.ContentId,
+                ContentName = c.ContentName,
+                MetricValue = c.Purchases,
+                MetricType = "Sales"
+            }).ToList();
 
-    public async Task<IEnumerable<PayoutHistoryDto>> GetPayoutHistoryAsync(Guid modelId, CancellationToken cancellationToken = default)
-    {
-        var payouts = await _payoutRepository.GetModelPayoutsAsync(modelId, cancellationToken);
-        
-        return payouts.Select(p => new PayoutHistoryDto
+        var topOverallContent = contentStats
+            .OrderByDescending(c => c.Purchases)
+            .Take(10)
+            .Select(c => new TopContentDto
+            {
+                ContentId = c.ContentId,
+                ContentName = c.ContentName,
+                MetricValue = c.Purchases,
+                MetricType = "Sales"
+            }).ToList();
+
+        var payoutHistory = payouts.Select(p => new PayoutHistoryDto
         {
             PayoutId = p.Id,
-            RequestedAt = p.RequestedAt,
-            CompletedAt = p.CompletedAt,
+            PayoutDate = p.CompletedAt ?? p.RequestedAt,
             AmountStars = p.AmountStars,
-            AmountFiat = p.AmountFiat,
-            Currency = p.Currency,
             Method = p.Method.ToString(),
             Status = p.Status.ToString(),
-            TrackingNumber = p.TrackingNumber
-        }).OrderByDescending(p => p.RequestedAt);
-    }
+            TransactionReference = p.TrackingNumber,
+            Notes = p.AdminNotes
+        }).OrderByDescending(p => p.PayoutDate).ToList();
 
-    public async Task<long> GetAvailableBalanceAsync(Guid modelId, CancellationToken cancellationToken = default)
-    {
-        var allPurchases = await _purchaseRepository.GetAllAsync(cancellationToken);
-        var totalRevenue = allPurchases
-            .OfType<PurchasePhoto>()
-            .Where(p => p.Photo.ModelId == modelId && p.PaymentStatus == PaymentStatus.Completed)
-            .Sum(p => p.Amount.Amount);
-
-        var totalPaidOut = await _payoutRepository.GetTotalPaidAmountAsync(modelId, cancellationToken);
-        
-        return totalRevenue - totalPaidOut;
-    }
-
-    public async Task<long> GetRevenueForPeriodAsync(
-        Guid modelId, 
-        DateTime startDate, 
-        DateTime endDate, 
-        CancellationToken cancellationToken = default)
-    {
-        var allPurchases = await _purchaseRepository.GetAllAsync(cancellationToken);
-        
-        return allPurchases
-            .OfType<PurchasePhoto>()
-            .Where(p => p.Photo.ModelId == modelId 
-                && p.PaymentStatus == PaymentStatus.Completed
-                && p.PurchaseDate >= startDate 
-                && p.PurchaseDate <= endDate)
-            .Sum(p => p.Amount.Amount);
+        return new RevenueAnalyticsDto
+        {
+            TotalRevenueStars = totalRevenue,
+            ThisMonthRevenueStars = thisMonthRevenue,
+            TodayRevenueStars = todayRevenue,
+            AvailableBalanceStars = availableBalance,
+            TotalSubscribers = subscriptions.Count(s => s.IsActive),
+            TotalSales = totalPurchases + subscriptions.Count,
+            AverageSalePriceStars = totalPurchases > 0 ? purchases.Sum(p => p.Amount.Amount) / totalPurchases : 0,
+            ConversionRate = conversionRate,
+            ContentStatistics = contentStats,
+            TopMonthlyContent = topMonthlyContent,
+            TopYearlyContent = topYearlyContent,
+            TopOverallContent = topOverallContent,
+            PayoutHistory = payoutHistory
+        };
     }
 }

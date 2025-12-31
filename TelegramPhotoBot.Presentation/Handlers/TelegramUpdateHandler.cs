@@ -2344,7 +2344,7 @@ public partial class TelegramUpdateHandler
 
             if (!subsList.Any())
             {
-                var noSubsMessage = "You don't have any model subscriptions yet.\n\n" +
+                var noSubsMessage = "📭 You don't have any model subscriptions yet.\n\n" +
                                    "Browse models and subscribe to your favorite creators!";
                 
                 var noSubsButtons = new List<List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>>
@@ -2352,13 +2352,13 @@ public partial class TelegramUpdateHandler
                     new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
                     {
                         Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
-                            "Browse Models",
+                            "🔍 Browse Models",
                             "menu_browse_models")
                     },
                     new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
                     {
                         Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
-                            "<< Back to Main Menu",
+                            "« Back to Main Menu",
                             "menu_back_main")
                     }
                 };
@@ -2368,26 +2368,51 @@ public partial class TelegramUpdateHandler
                 return;
             }
 
-            var message = $" Your Model Subscriptions ({subsList.Count}):\n\n";
+            var message = $"📋 Your Model Subscriptions ({subsList.Count}):\n\n";
+
+            // Build buttons for each subscribed model
+            var buttons = new List<List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>>();
 
             foreach (var sub in subsList)
             {
                 var model = await _modelService.GetModelByIdAsync(sub.ModelId, cancellationToken);
                 if (model == null) continue;
 
-                var statusEmoji = sub.IsValidNow() ? "" : "";
-                message += $"{statusEmoji} {model.DisplayName}\n";
-                message += $"   Status: {(sub.IsActive ? "Active" : "Inactive")}\n";
+                // Use alias if available, otherwise use DisplayName
+                var modelDisplayName = !string.IsNullOrWhiteSpace(model.Alias) 
+                    ? model.Alias 
+                    : model.DisplayName;
+
+                var statusEmoji = sub.IsValidNow() ? "✅" : "⚠️";
+                message += $"{statusEmoji} {modelDisplayName}\n";
+                message += $"   Status: {(sub.IsActive ? "🟢 Active" : "🔴 Inactive")}\n";
                 message += $"   Period: {sub.SubscriptionPeriod.StartDate:d} - {sub.SubscriptionPeriod.EndDate:d}\n";
                 message += $"   Days remaining: {sub.GetRemainingDays()}\n";
-                message += $"   Auto-renew: {(sub.AutoRenew ? "Yes" : "No")}\n\n";
+                message += $"   Auto-renew: {(sub.AutoRenew ? "✅ Yes" : "❌ No")}\n\n";
+
+                // Add button to view model's content
+                buttons.Add(new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
+                {
+                    Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
+                        $"📸 View {modelDisplayName}'s Content",
+                        $"view_model_content_{model.Id}")
+                });
             }
 
-            await _telegramBotService.SendMessageAsync(chatId, message, cancellationToken);
+            // Add back button
+            buttons.Add(new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
+            {
+                Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
+                    "« Back to Main Menu",
+                    "menu_back_main")
+            });
+
+            var keyboard = new Telegram.Bot.Types.ReplyMarkups.InlineKeyboardMarkup(buttons);
+            await _telegramBotService.SendMessageWithButtonsAsync(chatId, message, keyboard, cancellationToken);
         }
         catch (Exception ex)
         {
-            await _telegramBotService.SendMessageAsync(chatId, $"Error loading subscriptions: {ex.Message}", cancellationToken);
+            await _telegramBotService.SendMessageAsync(chatId, $"❌ Error loading subscriptions: {ex.Message}", cancellationToken);
         }
     }
 

@@ -389,16 +389,8 @@ public sealed class MtProtoBackgroundService : IMtProtoService, IDisposable
             
             Console.WriteLine($"📤 SendPhotoWithTimerAsync: user={recipientTelegramUserId}, file={filePath}, timer={selfDestructSeconds}s");
 
-            // Get user from dialogs
-            var dialogs = await _client!.Messages_GetAllDialogs();
-            var user = dialogs.users.Values.OfType<User>()
-                .FirstOrDefault(u => u.id == recipientTelegramUserId);
-
-            if (user == null)
-            {
-                Console.WriteLine($"❌ User {recipientTelegramUserId} not found");
-                return ContentDeliveryResult.Failure("User not found");
-            }
+            // Use InputPeerUser instead of fetching all dialogs - much faster!
+            var inputPeer = new InputPeerUser(recipientTelegramUserId, 0);
 
             // چک می‌کنیم که آیا cached MTProto info داریم
             if (photoEntity != null && photoEntity.HasMtProtoPhotoInfo())
@@ -427,22 +419,14 @@ public sealed class MtProtoBackgroundService : IMtProtoService, IDisposable
                         };
 
                         Console.WriteLine($"📤 Sending cached photo with {selfDestructSeconds}s timer... (attempt {attempt + 1})");
-                        var sendResult = await _client!.Messages_SendMedia(user, cachedMedia, caption ?? "", DateTime.UtcNow.Ticks);
+                        var sendResult = await _client!.SendMessageAsync(inputPeer, caption ?? "", media: cachedMedia);
                         
                         // ذخیره message ID برای refresh های بعدی
-                        if (sendResult is Updates updatesResult)
+                        if (sendResult is Message cachedSentMsg && cachedSentMsg.media is MessageMediaPhoto mmp && mmp.photo is TL.Photo photo)
                         {
-                            var sentMsg = updatesResult.updates.OfType<UpdateNewMessage>()
-                                .Select(x => x.message)
-                                .OfType<Message>()
-                                .FirstOrDefault();
-                                
-                            if (sentMsg != null && sentMsg.media is MessageMediaPhoto mmp && mmp.photo is TL.Photo photo)
-                            {
-                                // Update file_reference و message ID
-                                photoEntity.SetMtProtoPhotoInfo(photo.ID, photo.access_hash, photo.file_reference, sentMsg.ID);
-                                Console.WriteLine($"💾 Updated file_reference and saved message ID: {sentMsg.ID}");
-                            }
+                            // Update file_reference و message ID
+                            photoEntity.SetMtProtoPhotoInfo(photo.ID, photo.access_hash, photo.file_reference, cachedSentMsg.ID);
+                            Console.WriteLine($"💾 Updated file_reference and saved message ID: {cachedSentMsg.ID}");
                         }
                         
                         Console.WriteLine($"✅ Photo sent successfully using cache!");
@@ -551,17 +535,12 @@ public sealed class MtProtoBackgroundService : IMtProtoService, IDisposable
 
             // Send media
             Console.WriteLine($"📤 Sending uploaded photo with {selfDestructSeconds}s timer...");
-            var result = await _client!.Messages_SendMedia(user, media, caption ?? "", DateTime.UtcNow.Ticks);
+            var result = await _client!.SendMessageAsync(inputPeer, caption ?? "", media: media);
 
             // Extract photo info from result for caching
-            if (photoEntity != null && result is Updates updates)
+            if (photoEntity != null && result is Message sentMsg)
             {
-                var sentMsg = updates.updates.OfType<UpdateNewMessage>()
-                    .Select(x => x.message)
-                    .OfType<Message>()
-                    .FirstOrDefault();
-                    
-                if (sentMsg?.media is MessageMediaPhoto mmp && mmp.photo is TL.Photo photo)
+                if (sentMsg.media is MessageMediaPhoto mmp && mmp.photo is TL.Photo photo)
                 {
                     Console.WriteLine($"💾 Caching MTProto photo info (ID: {photo.ID}, MessageID: {sentMsg.ID})");
                     photoEntity.SetMtProtoPhotoInfo(photo.ID, photo.access_hash, photo.file_reference, sentMsg.ID);
@@ -604,18 +583,12 @@ public sealed class MtProtoBackgroundService : IMtProtoService, IDisposable
     {
         try
         {
-            await EnsureAuthenticatedAsync(cancellationToken); // ← Ensure authenticated
+            await EnsureAuthenticatedAsync(cancellationToken);
             
             Console.WriteLine($"📤 SendVideoWithTimerAsync: user={recipientTelegramUserId}, file={filePath}, timer={selfDestructSeconds}s");
 
-            var dialogs = await _client!.Messages_GetAllDialogs();
-            var user = dialogs.users.Values.OfType<User>()
-                .FirstOrDefault(u => u.id == recipientTelegramUserId);
-
-            if (user == null)
-            {
-                return ContentDeliveryResult.Failure("User not found");
-            }
+            // Use InputPeerUser instead of fetching all dialogs - much faster!
+            var inputPeer = new InputPeerUser(recipientTelegramUserId, 0);
 
             var inputFile = await _client!.UploadFileAsync(filePath, null);
             
@@ -628,7 +601,7 @@ public sealed class MtProtoBackgroundService : IMtProtoService, IDisposable
                 ttl_seconds = selfDestructSeconds
             };
 
-            await _client!.Messages_SendMedia(user, media, caption ?? "", DateTime.UtcNow.Ticks);
+            await _client!.SendMessageAsync(inputPeer, caption ?? "", media: media);
 
             return ContentDeliveryResult.Success();
         }

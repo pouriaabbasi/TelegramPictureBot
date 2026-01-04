@@ -735,7 +735,8 @@ public partial class TelegramUpdateHandler
             Console.WriteLine($"Error handling state-based input: {ex.Message}");
             await _userStateRepository.ClearStateAsync(userId, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
-            await _telegramBotService.SendMessageAsync(chatId, $"Error processing your input: {ex.Message}\n\nPlease try again.", cancellationToken);
+            var errorMsg = await _localizationService.GetStringAsync("error.processing_input", ex.Message);
+            await _telegramBotService.SendMessageAsync(chatId, errorMsg, cancellationToken);
         }
     }
 
@@ -921,9 +922,10 @@ public partial class TelegramUpdateHandler
         }
         catch (Exception ex)
         {
+            var errorMsg = await _localizationService.GetStringAsync("error.loading_photos", ex.Message);
             await _telegramBotService.SendMessageAsync(
                 chatId,
-                $"Error loading photos: {ex.Message}",
+                errorMsg,
                 cancellationToken);
         }
     }
@@ -934,9 +936,10 @@ public partial class TelegramUpdateHandler
         {
             if (!Guid.TryParse(photoIdStr, out var photoId))
             {
+                var invalidPhotoIdMsg = await _localizationService.GetStringAsync("common.invalid_photo_id", cancellationToken);
                 await _telegramBotService.SendMessageAsync(
                     chatId,
-                    "Invalid photo ID format. Please use a valid photo ID from /photos",
+                    invalidPhotoIdMsg,
                     cancellationToken);
                 return;
             }
@@ -945,9 +948,10 @@ public partial class TelegramUpdateHandler
             var photo = await _photoRepository.GetByIdAsync(photoId, cancellationToken);
             if (photo == null || !photo.IsForSale)
             {
+                var notFoundMsg = await _localizationService.GetStringAsync("content.not_found", cancellationToken);
                 await _telegramBotService.SendMessageAsync(
                     chatId,
-                    "Photo not found or not available for purchase.",
+                    notFoundMsg,
                     cancellationToken);
                 return;
             }
@@ -979,17 +983,19 @@ public partial class TelegramUpdateHandler
             }
             else
             {
+                var invoiceFailedMsg = await _localizationService.GetStringAsync("purchase.invoice_failed", cancellationToken);
                 await _telegramBotService.SendMessageAsync(
                     chatId,
-                    " Failed to create invoice. Please try again later.",
+                    invoiceFailedMsg,
                     cancellationToken);
             }
         }
         catch (Exception ex)
         {
+            var errorMsg = await _localizationService.GetStringAsync("error.generic", ex.Message);
             await _telegramBotService.SendMessageAsync(
                 chatId,
-                $"Error processing request: {ex.Message}",
+                errorMsg,
                 cancellationToken);
         }
     }
@@ -1071,9 +1077,10 @@ public partial class TelegramUpdateHandler
         }
         catch (Exception ex)
         {
+            var errorMsg = await _localizationService.GetStringAsync("error.loading_your_content", ex.Message);
             await _telegramBotService.SendMessageAsync(
                 chatId,
-                $"Error loading your content: {ex.Message}",
+                errorMsg,
                 cancellationToken);
         }
     }
@@ -1098,7 +1105,8 @@ public partial class TelegramUpdateHandler
             var photo = await _photoRepository.GetByIdAsync(photoId, cancellationToken);
             if (photo == null)
             {
-                await _telegramBotService.SendMessageAsync(chatId, "Photo not found.", cancellationToken);
+                var photoNotFoundMsg = await _localizationService.GetStringAsync("content.photo_not_found", cancellationToken);
+                await _telegramBotService.SendMessageAsync(chatId, photoNotFoundMsg, cancellationToken);
                 return;
             }
 
@@ -1162,9 +1170,10 @@ public partial class TelegramUpdateHandler
                 }
                 else
                 {
+                    var failedMsg = await _localizationService.GetStringAsync("delivery.failed", cancellationToken);
                     await _telegramBotService.SendMessageAsync(
                         chatId,
-                        deliveryResult.ErrorMessage ?? "❌ Failed to send photo. Please try again later.",
+                        deliveryResult.ErrorMessage ?? failedMsg,
                         cancellationToken);
                 }
             }
@@ -1182,17 +1191,15 @@ public partial class TelegramUpdateHandler
             Console.WriteLine($"❌ Error in HandleViewPhotoCommandAsync: {ex.Message}");
             Console.WriteLine($"❌ Stack trace: {ex.StackTrace}");
             
-            var errorMessage = "❌ خطا در ارسال عکس.\n\n";
+            var errorMessage = await _localizationService.GetStringAsync("delivery.error.general", "");
             
             if (ex.Message.Contains("PHONE_MIGRATE") || ex.Message.Contains("not configured") || ex.Message.Contains("authentication"))
             {
-                errorMessage += "⚠️ MTProto service is not properly configured or authenticated.\n\n";
-                errorMessage += "Please contact the admin to configure MTProto using `/mtproto_setup`.";
+                errorMessage = await _localizationService.GetStringAsync("delivery.error.mtproto", cancellationToken);
             }
             else
             {
-                errorMessage += $"خطا: {ex.Message}\n\n";
-                errorMessage += "لطفاً دوباره تلاش کنید یا با ادمین تماس بگیرید.";
+                errorMessage = await _localizationService.GetStringAsync("delivery.error.general", ex.Message);
             }
             
             await _telegramBotService.SendMessageAsync(
@@ -1207,7 +1214,8 @@ public partial class TelegramUpdateHandler
         var photo = await _photoRepository.GetByIdAsync(photoId, cancellationToken);
         if (photo == null || !photo.IsForSale)
         {
-            await _telegramBotService.SendMessageAsync(chatId, "Photo not found or is not for sale.", cancellationToken);
+            var notForSaleMsg = await _localizationService.GetStringAsync("content.not_for_sale", cancellationToken);
+            await _telegramBotService.SendMessageAsync(chatId, notForSaleMsg, cancellationToken);
             return;
         }
 
@@ -1250,7 +1258,8 @@ public partial class TelegramUpdateHandler
         }
         else
         {
-            await _telegramBotService.SendMessageAsync(chatId, result.ErrorMessage ?? "Failed to create test purchase.", cancellationToken);
+            var failedMsg = await _localizationService.GetStringAsync("purchase.test_failed", cancellationToken);
+            await _telegramBotService.SendMessageAsync(chatId, result.ErrorMessage ?? failedMsg, cancellationToken);
         }
     }
 
@@ -1269,7 +1278,8 @@ public partial class TelegramUpdateHandler
         var user = await _userService.GetUserByTelegramIdAsync(telegramUserId, cancellationToken);
         if (user == null)
         {
-            await _telegramBotService.SendMessageAsync(chatId, "User not found. Please send /start first.", cancellationToken);
+            var userNotFoundMsg = await _localizationService.GetStringAsync("user.not_found", cancellationToken);
+            await _telegramBotService.SendMessageAsync(chatId, userNotFoundMsg, cancellationToken);
             return;
         }
 
@@ -1290,7 +1300,8 @@ public partial class TelegramUpdateHandler
         var user = await _userService.GetUserByTelegramIdAsync(telegramUserId, cancellationToken);
         if (user == null)
         {
-            await _telegramBotService.SendMessageAsync(chatId, "User not found. Please send /start first.", cancellationToken);
+            var userNotFoundMsg = await _localizationService.GetStringAsync("user.not_found", cancellationToken);
+            await _telegramBotService.SendMessageAsync(chatId, userNotFoundMsg, cancellationToken);
             return;
         }
 
@@ -1323,9 +1334,10 @@ public partial class TelegramUpdateHandler
             var photo = await _photoRepository.GetByIdAsync(photoId, cancellationToken);
             if (photo == null || !photo.IsForSale)
             {
+                var notFoundMsg = await _localizationService.GetStringAsync("content.not_found", cancellationToken);
                 await _telegramBotService.SendMessageAsync(
                     chatId,
-                    "Photo not found or not available for purchase.",
+                    notFoundMsg,
                     cancellationToken);
                 return;
             }
@@ -1349,10 +1361,12 @@ public partial class TelegramUpdateHandler
                     await _unitOfWork.SaveChangesAsync(cancellationToken);
                 }
 
-                var successMessage = "Test photo purchase successful!\n\n" +
-                                    $"Photo: {photo.Caption ?? "Untitled"}\n" +
-                                    $"Price: {photo.Price.Amount} stars (test - not charged)\n\n" +
-                                    "You now have access to this photo!";
+                var successMessage = await _localizationService.GetStringAsync(
+                    "purchase.test_success",
+                    user.FirstName,
+                    photo.Caption ?? "Untitled",
+                    photo.Price.Amount.ToString(),
+                    DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss"));
                 
                 var successButtons = new List<List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>>
                 {
@@ -1375,17 +1389,19 @@ public partial class TelegramUpdateHandler
             }
             else
             {
+                var failedMsg = await _localizationService.GetStringAsync("purchase.failed", result.ErrorMessage ?? "");
                 await _telegramBotService.SendMessageAsync(
                     chatId,
-                    $" Failed to purchase photo: {result.ErrorMessage}",
+                    failedMsg,
                     cancellationToken);
             }
         }
         catch (Exception ex)
         {
+            var errorMsg = await _localizationService.GetStringAsync("error.generic", ex.Message);
             await _telegramBotService.SendMessageAsync(
                 chatId,
-                $"Error: {ex.Message}",
+                errorMsg,
                 cancellationToken);
         }
     }
@@ -1748,9 +1764,10 @@ public partial class TelegramUpdateHandler
         }
         catch (Exception ex)
         {
+            var errorMsg = await _localizationService.GetStringAsync("error.loading_models", ex.Message);
             await _telegramBotService.SendMessageAsync(
                 chatId,
-                $"Error loading models: {ex.Message}",
+                errorMsg,
                 cancellationToken);
         }
     }
@@ -1764,7 +1781,8 @@ public partial class TelegramUpdateHandler
         {
             if (!Guid.TryParse(modelIdStr, out var modelId))
             {
-                await _telegramBotService.SendMessageAsync(chatId, "Invalid model ID format.", cancellationToken);
+                var invalidIdMsg = await _localizationService.GetStringAsync("common.invalid_id", cancellationToken);
+                await _telegramBotService.SendMessageAsync(chatId, invalidIdMsg, cancellationToken);
                 return;
             }
 
@@ -1872,7 +1890,8 @@ public partial class TelegramUpdateHandler
         }
         catch (Exception ex)
         {
-            await _telegramBotService.SendMessageAsync(chatId, $"Error viewing model: {ex.Message}", cancellationToken);
+            var errorMsg = await _localizationService.GetStringAsync("error.viewing_model", ex.Message);
+            await _telegramBotService.SendMessageAsync(chatId, errorMsg, cancellationToken);
         }
     }
 
@@ -1976,7 +1995,8 @@ public partial class TelegramUpdateHandler
         catch (Exception ex)
         {
             Console.WriteLine($"Error viewing model content: {ex.Message}");
-            await _telegramBotService.SendMessageAsync(chatId, $"Error loading content: {ex.Message}", cancellationToken);
+            var errorMsg = await _localizationService.GetStringAsync("error.loading_content", ex.Message);
+            await _telegramBotService.SendMessageAsync(chatId, errorMsg, cancellationToken);
         }
     }
 
@@ -2141,7 +2161,8 @@ public partial class TelegramUpdateHandler
         catch (Exception ex)
         {
             Console.WriteLine($"Error viewing demo content: {ex.Message}");
-            await _telegramBotService.SendMessageAsync(chatId, $"Error loading demo content: {ex.Message}", cancellationToken);
+            var errorMsg = await _localizationService.GetStringAsync("error.loading_demo", ex.Message);
+            await _telegramBotService.SendMessageAsync(chatId, errorMsg, cancellationToken);
         }
     }
 
@@ -2223,8 +2244,8 @@ public partial class TelegramUpdateHandler
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"❌ Error in become model flow: {ex.Message}");
-            await _telegramBotService.SendMessageAsync(chatId, $"Error: {ex.Message}", cancellationToken);
+            var errorMsg = await _localizationService.GetStringAsync("error.become_model_flow", ex.Message);
+            await _telegramBotService.SendMessageAsync(chatId, errorMsg, cancellationToken);
         }
     }
 
@@ -2321,7 +2342,8 @@ public partial class TelegramUpdateHandler
         catch (Exception ex)
         {
             Console.WriteLine($"❌ Error registering model: {ex.Message}");
-            await _telegramBotService.SendMessageAsync(chatId, $"Error registering model: {ex.Message}", cancellationToken);
+            var errorMsg = await _localizationService.GetStringAsync("error.become_model", ex.Message);
+            await _telegramBotService.SendMessageAsync(chatId, errorMsg, cancellationToken);
         }
     }
 
@@ -2479,7 +2501,8 @@ public partial class TelegramUpdateHandler
         }
         catch (Exception ex)
         {
-            await _telegramBotService.SendMessageAsync(chatId, $"Error loading dashboard: {ex.Message}", cancellationToken);
+            var errorMsg = await _localizationService.GetStringAsync("error.loading_dashboard", ex.Message);
+            await _telegramBotService.SendMessageAsync(chatId, errorMsg, cancellationToken);
         }
     }
 
@@ -2568,7 +2591,8 @@ public partial class TelegramUpdateHandler
         }
         catch (Exception ex)
         {
-            await _telegramBotService.SendMessageAsync(chatId, $"❌ Error loading subscriptions: {ex.Message}", cancellationToken);
+            var errorMsg = await _localizationService.GetStringAsync("error.loading_subscriptions", ex.Message);
+            await _telegramBotService.SendMessageAsync(chatId, errorMsg, cancellationToken);
         }
     }
 
@@ -2684,7 +2708,8 @@ public partial class TelegramUpdateHandler
         }
         catch (Exception ex)
         {
-            await _telegramBotService.SendMessageAsync(chatId, $"Error loading admin panel: {ex.Message}", cancellationToken);
+            var errorMsg = await _localizationService.GetStringAsync("error.loading_admin_panel", ex.Message);
+            await _telegramBotService.SendMessageAsync(chatId, errorMsg, cancellationToken);
         }
     }
 
@@ -3010,7 +3035,8 @@ public partial class TelegramUpdateHandler
         }
         catch (Exception ex)
         {
-            await _telegramBotService.SendMessageAsync(chatId, $"Error subscribing: {ex.Message}", cancellationToken);
+            var errorMsg = await _localizationService.GetStringAsync("error.subscribing", ex.Message);
+            await _telegramBotService.SendMessageAsync(chatId, errorMsg, cancellationToken);
         }
     }
 
@@ -3103,7 +3129,8 @@ public partial class TelegramUpdateHandler
         }
         catch (Exception ex)
         {
-            await _telegramBotService.SendMessageAsync(chatId, $"Error approving model: {ex.Message}", cancellationToken);
+            var errorMsg = await _localizationService.GetStringAsync("error.approving_model", ex.Message);
+            await _telegramBotService.SendMessageAsync(chatId, errorMsg, cancellationToken);
         }
     }
 
@@ -3187,7 +3214,8 @@ public partial class TelegramUpdateHandler
         }
         catch (Exception ex)
         {
-            await _telegramBotService.SendMessageAsync(chatId, $"Error rejecting model: {ex.Message}", cancellationToken);
+            var errorMsg = await _localizationService.GetStringAsync("error.rejecting_model", ex.Message);
+            await _telegramBotService.SendMessageAsync(chatId, errorMsg, cancellationToken);
         }
     }
 
@@ -3258,7 +3286,8 @@ public partial class TelegramUpdateHandler
         catch (Exception ex)
         {
             Console.WriteLine($"❌ Error handling model reapplication: {ex.Message}");
-            await _telegramBotService.SendMessageAsync(chatId, $"Error submitting new application: {ex.Message}", cancellationToken);
+            var errorMsg = await _localizationService.GetStringAsync("error.reapplication", ex.Message);
+            await _telegramBotService.SendMessageAsync(chatId, errorMsg, cancellationToken);
         }
     }
 
@@ -3731,7 +3760,8 @@ public partial class TelegramUpdateHandler
         }
         catch (Exception ex)
         {
-            await _telegramBotService.SendMessageAsync(chatId, $"Error deleting content: {ex.Message}", cancellationToken);
+            var errorMsg = await _localizationService.GetStringAsync("error.deleting_content", ex.Message);
+            await _telegramBotService.SendMessageAsync(chatId, errorMsg, cancellationToken);
         }
     }
 

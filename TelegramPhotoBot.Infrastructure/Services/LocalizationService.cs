@@ -712,6 +712,295 @@ Date: 2025-01-01" }
             { BotLanguage.English, "You declined the terms. You cannot register as a model without accepting the terms." }
         },
         #endregion
+        
+        #region Content & Purchase
+        ["content.not_found"] = new()
+        {
+            { BotLanguage.Persian, "📸 محتوا یافت نشد یا برای خرید در دسترس نیست." },
+            { BotLanguage.English, "📸 Content not found or not available for purchase." }
+        },
+        ["content.photo_not_found"] = new()
+        {
+            { BotLanguage.Persian, "📸 عکس یافت نشد." },
+            { BotLanguage.English, "📸 Photo not found." }
+        },
+        ["content.not_for_sale"] = new()
+        {
+            { BotLanguage.Persian, "❌ این محتوا برای فروش در دسترس نیست." },
+            { BotLanguage.English, "❌ This content is not available for sale." }
+        },
+        ["purchase.success"] = new()
+        {
+            { BotLanguage.Persian, "✅ خرید با موفقیت انجام شد!" },
+            { BotLanguage.English, "✅ Purchase successful!" }
+        },
+        ["purchase.test_success"] = new()
+        {
+            { BotLanguage.Persian, "✅ خرید آزمایشی عکس موفق بود!\n\n🔍 اطلاعات خرید:\n• کاربر: {0}\n• عکس: {1}\n• قیمت: {2} ستاره\n• تاریخ: {3}" },
+            { BotLanguage.English, "✅ Test photo purchase successful!\n\n🔍 Purchase Details:\n• User: {0}\n• Photo: {1}\n• Price: {2} Stars\n• Date: {3}" }
+        },
+        ["purchase.failed"] = new()
+        {
+            { BotLanguage.Persian, "❌ خرید ناموفق بود: {0}" },
+            { BotLanguage.English, "❌ Purchase failed: {0}" }
+        },
+        ["purchase.invoice_failed"] = new()
+        {
+            { BotLanguage.Persian, "❌ ایجاد صورتحساب ناموفق بود. لطفاً دوباره تلاش کنید." },
+            { BotLanguage.English, "❌ Failed to create invoice. Please try again later." }
+        },
+        ["purchase.test_failed"] = new()
+        {
+            { BotLanguage.Persian, "❌ ایجاد خرید آزمایشی ناموفق بود." },
+            { BotLanguage.English, "❌ Failed to create test purchase." }
+        },
+        #endregion
+        
+        #region Upload & Content Management
+        ["upload.prompt.photo"] = new()
+        {
+            { BotLanguage.Persian, "📸 لطفاً عکس خود را ارسال کنید:" },
+            { BotLanguage.English, "📸 Please send your photo:" }
+        },
+        ["upload.prompt.caption"] = new()
+        {
+            { BotLanguage.Persian, "✍️ لطفاً توضیحات این محتوا را وارد کنید:\n\n💡 این متن برای کاربران نمایش داده می‌شود." },
+            { BotLanguage.English, "✍️ Please enter the caption for this content:\n\n💡 This text will be displayed to users." }
+        },
+        ["upload.prompt.price"] = new()
+        {
+            { BotLanguage.Persian, "💰 لطفاً قیمت را به ستاره تلگرام وارد کنید:\n\n💡 مثال: 100" },
+            { BotLanguage.English, "💰 Please enter the price in Telegram Stars:\n\n💡 Example: 100" }
+        },
+        ["upload.success"] = new()
+        {
+            { BotLanguage.Persian, "✅ محتوا با موفقیت آپلود شد!\n\n📊 آماده برای فروش است." },
+            { BotLanguage.English, "✅ Content uploaded successfully!\n\n📊 Ready for sale." }
+        },
+        ["content.delete_success"] = new()
+        {
+            { BotLanguage.Persian, "✅ محتوا با موفقیت حذف شد!\n\n🗑️ دیگر برای کاربران قابل مشاهده نیست." },
+            { BotLanguage.English, "✅ Content deleted successfully!\n\n🗑️ No longer visible to users." }
+        },
+        ["content.edit_caption_prompt"] = new()
+        {
+            { BotLanguage.Persian, "✍️ لطفاً توضیحات جدید این محتوا را ارسال کنید:\n\n📝 توضیحات فعلی:\n{0}" },
+            { BotLanguage.English, "✍️ Please reply with the new caption for this content:\n\n📝 Current caption:\n{0}" }
+        },
+        ["content.edit_price_prompt"] = new()
+        {
+            { BotLanguage.Persian, "💰 لطفاً قیمت جدید را به ستاره تلگرام ارسال کنید:\n\n💵 قیمت فعلی: {0} ستاره\n\n💡 مثال: 150" },
+            { BotLanguage.English, "💰 Please reply with the new price in Telegram Stars:\n\n💵 Current price: {0} Stars\n\n💡 Example: 150" }
+        },
+        #endregion
+        
+        #region Model Registration
+        ["model.registration_success"] = new()
+        {
+            { BotLanguage.Persian, "✅ درخواست ثبت‌نام مدل با موفقیت ارسال شد!\n\n⏳ لطفاً منتظر بررسی و تایید ادمین باشید.\n\n📧 پس از تایید، اطلاع‌رسانی خواهید شد." },
+            { BotLanguage.English, "✅ Model registration submitted successfully!\n\n⏳ Please wait for admin review and approval.\n\n📧 You will be notified after approval." }
+        },
+        ["model.reapplication_success"] = new()
+        {
+            { BotLanguage.Persian, "✅ درخواست جدید با موفقیت ارسال شد!\n\n⏳ لطفاً منتظر بررسی ادمین باشید." },
+            { BotLanguage.English, "✅ New application submitted successfully!\n\n⏳ Please wait for admin review." }
+        },
+        #endregion
+        
+        #region User & Validation
+        ["user.not_found"] = new()
+        {
+            { BotLanguage.Persian, "❌ کاربر یافت نشد. لطفاً ابتدا /start را ارسال کنید." },
+            { BotLanguage.English, "❌ User not found. Please send /start first." }
+        },
+        ["common.invalid_id"] = new()
+        {
+            { BotLanguage.Persian, "❌ فرمت شناسه نامعتبر است." },
+            { BotLanguage.English, "❌ Invalid ID format." }
+        },
+        ["common.invalid_photo_id"] = new()
+        {
+            { BotLanguage.Persian, "❌ فرمت شناسه عکس نامعتبر است. لطفاً از /photos یک شناسه معتبر استفاده کنید." },
+            { BotLanguage.English, "❌ Invalid photo ID format. Please use a valid photo ID from /photos" }
+        },
+        #endregion
+        
+        #region Content Delivery
+        ["delivery.error.general"] = new()
+        {
+            { BotLanguage.Persian, "❌ خطا در ارسال عکس.\n\n{0}" },
+            { BotLanguage.English, "❌ Error sending photo.\n\n{0}" }
+        },
+        ["delivery.error.mtproto"] = new()
+        {
+            { BotLanguage.Persian, "⚠️ سرویس MTProto به درستی پیکربندی یا احراز هویت نشده است.\n\nلطفاً با ادمین تماس بگیرید تا MTProto را با `/mtproto_setup` پیکربندی کند." },
+            { BotLanguage.English, "⚠️ MTProto service is not properly configured or authenticated.\n\nPlease contact the admin to configure MTProto using `/mtproto_setup`." }
+        },
+        ["delivery.failed"] = new()
+        {
+            { BotLanguage.Persian, "❌ ارسال محتوا ناموفق بود. لطفاً دوباره تلاش کنید." },
+            { BotLanguage.English, "❌ Failed to send content. Please try again later." }
+        },
+        ["delivery.contact_error"] = new()
+        {
+            { BotLanguage.Persian, "❌ خطا در ارسال اطلاعات تماس: {0}" },
+            { BotLanguage.English, "❌ Error sending contact: {0}" }
+        },
+        #endregion
+        
+        #region Admin Setup
+        ["admin.setup.api_id"] = new()
+        {
+            { BotLanguage.Persian, "🚀 بیایید شروع کنیم! لطفاً **API ID** خود را ارسال کنید:" },
+            { BotLanguage.English, "🚀 Let's start! Please send your **API ID**:" }
+        },
+        ["admin.setup.setting_prompt"] = new()
+        {
+            { BotLanguage.Persian, "📝 لطفاً مقدار جدید این تنظیمات را ارسال کنید:\n\n📌 تنظیم: {0}\n📖 توضیحات: {1}" },
+            { BotLanguage.English, "📝 Please send the new value for this setting:\n\n📌 Setting: {0}\n📖 Description: {1}" }
+        },
+        ["admin.setup.subscription_prompt"] = new()
+        {
+            { BotLanguage.Persian, "📝 لطفاً جزئیات اشتراک را به این فرمت ارسال کنید:\n\n**قالب:** نام - مدت (روز) - قیمت (ستاره)\n**مثال:** Premium - 30 - 500" },
+            { BotLanguage.English, "📝 Please reply with the subscription details in this format:\n\n**Format:** Name - Duration (days) - Price (Stars)\n**Example:** Premium - 30 - 500" }
+        },
+        #endregion
+        
+        #region Subscribe
+        ["subscribe.success"] = new()
+        {
+            { BotLanguage.Persian, "✅ با موفقیت مشترک {0} شدید!\n\n🎉 اکنون می‌توانید تمام محتوای این مدل را مشاهده کنید." },
+            { BotLanguage.English, "✅ Successfully subscribed to {0}!\n\n🎉 You can now view all content from this model." }
+        },
+        #endregion
+        
+        #region Generic Errors
+        ["error.loading_photos"] = new()
+        {
+            { BotLanguage.Persian, "❌ خطا در بارگذاری عکس‌ها: {0}" },
+            { BotLanguage.English, "❌ Error loading photos: {0}" }
+        },
+        ["error.loading_content"] = new()
+        {
+            { BotLanguage.Persian, "❌ خطا در بارگذاری محتوا: {0}" },
+            { BotLanguage.English, "❌ Error loading content: {0}" }
+        },
+        ["error.loading_your_content"] = new()
+        {
+            { BotLanguage.Persian, "❌ خطا در بارگذاری محتوای شما: {0}" },
+            { BotLanguage.English, "❌ Error loading your content: {0}" }
+        },
+        ["error.loading_models"] = new()
+        {
+            { BotLanguage.Persian, "❌ خطا در بارگذاری مدل‌ها: {0}" },
+            { BotLanguage.English, "❌ Error loading models: {0}" }
+        },
+        ["error.loading_dashboard"] = new()
+        {
+            { BotLanguage.Persian, "❌ خطا در بارگذاری داشبورد: {0}" },
+            { BotLanguage.English, "❌ Error loading dashboard: {0}" }
+        },
+        ["error.loading_subscriptions"] = new()
+        {
+            { BotLanguage.Persian, "❌ خطا در بارگذاری اشتراک‌ها: {0}" },
+            { BotLanguage.English, "❌ Error loading subscriptions: {0}" }
+        },
+        ["error.loading_admin_panel"] = new()
+        {
+            { BotLanguage.Persian, "❌ خطا در بارگذاری پنل ادمین: {0}" },
+            { BotLanguage.English, "❌ Error loading admin panel: {0}" }
+        },
+        ["error.loading_settings"] = new()
+        {
+            { BotLanguage.Persian, "❌ خطا در بارگذاری تنظیمات: {0}" },
+            { BotLanguage.English, "❌ Error loading settings: {0}" }
+        },
+        ["error.loading_demo"] = new()
+        {
+            { BotLanguage.Persian, "❌ خطا در بارگذاری محتوای نمایشی: {0}" },
+            { BotLanguage.English, "❌ Error loading demo content: {0}" }
+        },
+        ["error.viewing_demo"] = new()
+        {
+            { BotLanguage.Persian, "❌ خطا در مشاهده محتوای نمایشی: {0}" },
+            { BotLanguage.English, "❌ Error viewing demo content: {0}" }
+        },
+        ["error.viewing_model"] = new()
+        {
+            { BotLanguage.Persian, "❌ خطا در مشاهده مدل: {0}" },
+            { BotLanguage.English, "❌ Error viewing model: {0}" }
+        },
+        ["error.viewing_model_content"] = new()
+        {
+            { BotLanguage.Persian, "❌ خطا در مشاهده محتوای مدل: {0}" },
+            { BotLanguage.English, "❌ Error viewing model content: {0}" }
+        },
+        ["error.subscribing"] = new()
+        {
+            { BotLanguage.Persian, "❌ خطا در اشتراک: {0}" },
+            { BotLanguage.English, "❌ Error subscribing: {0}" }
+        },
+        ["error.approving_model"] = new()
+        {
+            { BotLanguage.Persian, "❌ خطا در تایید مدل: {0}" },
+            { BotLanguage.English, "❌ Error approving model: {0}" }
+        },
+        ["error.rejecting_model"] = new()
+        {
+            { BotLanguage.Persian, "❌ خطا در رد مدل: {0}" },
+            { BotLanguage.English, "❌ Error rejecting model: {0}" }
+        },
+        ["error.reapplication"] = new()
+        {
+            { BotLanguage.Persian, "❌ خطا در ارسال درخواست جدید: {0}" },
+            { BotLanguage.English, "❌ Error submitting new application: {0}" }
+        },
+        ["error.deleting_content"] = new()
+        {
+            { BotLanguage.Persian, "❌ خطا در حذف محتوا: {0}" },
+            { BotLanguage.English, "❌ Error deleting content: {0}" }
+        },
+        ["error.become_model"] = new()
+        {
+            { BotLanguage.Persian, "❌ خطا در ثبت‌نام مدل: {0}" },
+            { BotLanguage.English, "❌ Error registering model: {0}" }
+        },
+        ["error.become_model_flow"] = new()
+        {
+            { BotLanguage.Persian, "❌ خطا در فرآیند ثبت‌نام مدل: {0}" },
+            { BotLanguage.English, "❌ Error in become model flow: {0}" }
+        },
+        ["error.single_model_enable"] = new()
+        {
+            { BotLanguage.Persian, "❌ خطا در فعال‌سازی حالت تک مدل: {0}" },
+            { BotLanguage.English, "❌ Error enabling Single Model Mode: {0}" }
+        },
+        ["error.single_model_disable"] = new()
+        {
+            { BotLanguage.Persian, "❌ خطا در غیرفعال‌سازی حالت تک مدل: {0}" },
+            { BotLanguage.English, "❌ Error disabling Single Model Mode: {0}" }
+        },
+        ["error.mtproto_setup"] = new()
+        {
+            { BotLanguage.Persian, "❌ خطا در راه‌اندازی MTProto: {0}" },
+            { BotLanguage.English, "❌ Error in MTProto setup: {0}" }
+        },
+        ["error.setting_language"] = new()
+        {
+            { BotLanguage.Persian, "❌ خطا در تنظیم زبان: {0}" },
+            { BotLanguage.English, "❌ Error setting language: {0}" }
+        },
+        ["error.generic"] = new()
+        {
+            { BotLanguage.Persian, "❌ خطا: {0}" },
+            { BotLanguage.English, "❌ Error: {0}" }
+        },
+        ["error.processing_input"] = new()
+        {
+            { BotLanguage.Persian, "❌ خطا در پردازش ورودی شما: {0}\n\nلطفاً دوباره تلاش کنید." },
+            { BotLanguage.English, "❌ Error processing your input: {0}\n\nPlease try again." }
+        }
+        #endregion
     };
     
     public LocalizationService(

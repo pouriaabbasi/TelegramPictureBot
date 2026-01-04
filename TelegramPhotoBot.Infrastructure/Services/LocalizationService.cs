@@ -999,6 +999,44 @@ Date: 2025-01-01" }
         {
             { BotLanguage.Persian, "❌ خطا در پردازش ورودی شما: {0}\n\nلطفاً دوباره تلاش کنید." },
             { BotLanguage.English, "❌ Error processing your input: {0}\n\nPlease try again." }
+        },
+        #endregion
+        
+        #region Models Browse
+        ["models.none_available"] = new()
+        {
+            { BotLanguage.Persian, "📭 هنوز مدلی موجود نیست.\n\n💡 می‌خواهید سازنده محتوا شوید؟" },
+            { BotLanguage.English, "📭 No models available yet.\n\n💡 Want to become a content creator?" }
+        },
+        ["models.available_count"] = new()
+        {
+            { BotLanguage.Persian, "👥 مدل‌های موجود ({0}):\n\n" },
+            { BotLanguage.English, "👥 Available Models ({0}):\n\n" }
+        },
+        ["models.subscribers"] = new()
+        {
+            { BotLanguage.Persian, "   👥 مشترکین: {0}" },
+            { BotLanguage.English, "   👥 Subscribers: {0}" }
+        },
+        ["models.content_count"] = new()
+        {
+            { BotLanguage.Persian, "   📸 محتوا: {0} عکس پریمیوم" },
+            { BotLanguage.English, "   📸 Content: {0} premium photos" }
+        },
+        ["models.subscription_info"] = new()
+        {
+            { BotLanguage.Persian, "   💳 اشتراک: {0} ستاره / {1} روز" },
+            { BotLanguage.English, "   💳 Subscription: {0} stars / {1} days" }
+        },
+        ["models.view_button"] = new()
+        {
+            { BotLanguage.Persian, "👁️ مشاهده {0}" },
+            { BotLanguage.English, "👁️ View {0}" }
+        },
+        ["models.become_model_button"] = new()
+        {
+            { BotLanguage.Persian, "⭐ مدل شوید" },
+            { BotLanguage.English, "⭐ Become a Model" }
         }
         #endregion
     };

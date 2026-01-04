@@ -1707,21 +1707,22 @@ public partial class TelegramUpdateHandler
 
             if (!modelsList.Any())
             {
-                var noModelsMessage = "No models available yet.\n\n" +
-                                     "Want to become a content creator?";
+                var noModelsMessage = await _localizationService.GetStringAsync("models.none_available", cancellationToken);
+                var becomeModelText = await _localizationService.GetStringAsync("models.become_model_button", cancellationToken);
+                var backText = await _localizationService.GetStringAsync("common.back_to_main", cancellationToken);
                 
                 var noModelsButtons = new List<List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>>
                 {
                     new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
                     {
                         Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
-                            "Become a Model",
+                            becomeModelText,
                             "menu_register_model")
                     },
                     new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
                     {
                         Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
-                            "<< Back to Main Menu",
+                            backText,
                             "menu_back_main")
                     }
                 };
@@ -1731,7 +1732,7 @@ public partial class TelegramUpdateHandler
                 return;
             }
 
-            var message = $"Available Models ({modelsList.Count}):\n\n";
+            var message = await _localizationService.GetStringAsync("models.available_count", modelsList.Count.ToString());
             var buttons = new List<List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>>();
 
             foreach (var model in modelsList.Take(10)) // Limit to 10 for UI
@@ -1746,27 +1747,37 @@ public partial class TelegramUpdateHandler
                 {
                     message += $"   {model.Bio.Substring(0, Math.Min(80, model.Bio.Length))}\n";
                 }
-                message += $"   Subscribers: {stats.TotalSubscribers}\n";
-                message += $"   Content: {stats.PremiumPhotos} premium photos\n";
+                
+                var subscribersText = await _localizationService.GetStringAsync("models.subscribers", stats.TotalSubscribers.ToString());
+                message += $"{subscribersText}\n";
+                
+                var contentText = await _localizationService.GetStringAsync("models.content_count", stats.PremiumPhotos.ToString());
+                message += $"{contentText}\n";
+                
                 if (stats.HasSubscriptionAvailable && stats.SubscriptionPrice.HasValue)
                 {
-                    message += $"   Subscription: {stats.SubscriptionPrice} stars/{stats.SubscriptionDurationDays} days\n";
+                    var subscriptionText = await _localizationService.GetStringAsync("models.subscription_info", 
+                        stats.SubscriptionPrice.Value.ToString(), 
+                        stats.SubscriptionDurationDays.ToString());
+                    message += $"{subscriptionText}\n";
                 }
                 message += "\n";
 
+                var viewButtonText = await _localizationService.GetStringAsync("models.view_button", displayText);
                 buttons.Add(new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
                 {
                     Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
-                        $"View {displayText}",
+                        viewButtonText,
                         $"view_model_{model.Id}")
                 });
             }
 
             // Add back button
+            var backBtnText = await _localizationService.GetStringAsync("common.back_to_main", cancellationToken);
             buttons.Add(new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
             {
                 Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
-                    "<< Back to Main Menu",
+                    backBtnText,
                     "menu_back_main")
             });
 

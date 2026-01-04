@@ -571,13 +571,16 @@ public partial class TelegramUpdateHandler
                 {
                     await HandleAdminSettingsAsync(chatId, cancellationToken);
                 }
-                else if (secondPart == "language" && thirdPart == "settings")
+                else if (secondPart == "language")
                 {
-                    await HandleAdminLanguageSettingsAsync(user.Id, chatId, cancellationToken);
-                }
-                else if (secondPart == "language" && parts.Length > 3 && Enum.TryParse<Domain.Enums.BotLanguage>(parts[3], out var selectedLanguage))
-                {
-                    await HandleAdminSetLanguageAsync(user.Id, chatId, selectedLanguage, cancellationToken);
+                    if (thirdPart == "settings")
+                    {
+                        await HandleAdminLanguageSettingsAsync(user.Id, chatId, cancellationToken);
+                    }
+                    else if (thirdPart == "set" && parts.Length > 3 && Enum.TryParse<Domain.Enums.BotLanguage>(parts[3], out var selectedLanguage))
+                    {
+                        await HandleAdminSetLanguageAsync(user.Id, chatId, selectedLanguage, cancellationToken);
+                    }
                 }
                 else if (secondPart == "single" && thirdPart == "model" && parts.Length > 3)
                 {
@@ -2828,21 +2831,25 @@ public partial class TelegramUpdateHandler
             message += "\n\n";
             message += await _localizationService.GetStringAsync("admin.settings.language.select");
             
+            // Create buttons in two rows (one button per row for better UX)
             var buttons = new List<List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>>
             {
                 new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
                 {
                     Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
-                        await _localizationService.GetStringAsync("admin.settings.language.persian"),
-                        "admin_language_Persian"),
-                    Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
-                        await _localizationService.GetStringAsync("admin.settings.language.english"),
-                        "admin_language_English")
+                        "🇮🇷 فارسی" + (currentLanguage == Domain.Enums.BotLanguage.Persian ? " ✅" : ""),
+                        "admin_language_set_Persian")
                 },
                 new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
                 {
                     Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
-                        "<< Back to Settings",
+                        "🇬🇧 English" + (currentLanguage == Domain.Enums.BotLanguage.English ? " ✅" : ""),
+                        "admin_language_set_English")
+                },
+                new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
+                {
+                    Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
+                        await _localizationService.GetStringAsync("menu.back"),
                         "admin_settings")
                 }
             };
@@ -2852,7 +2859,8 @@ public partial class TelegramUpdateHandler
         }
         catch (Exception ex)
         {
-            await _telegramBotService.SendMessageAsync(chatId, $"Error loading language settings: {ex.Message}", cancellationToken);
+            var errorMsg = await _localizationService.GetStringAsync("error.setting_language", ex.Message);
+            await _telegramBotService.SendMessageAsync(chatId, errorMsg, cancellationToken);
         }
     }
 

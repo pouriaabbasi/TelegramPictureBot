@@ -2335,18 +2335,20 @@ public partial class TelegramUpdateHandler
             var model = await _modelService.GetModelByUserIdAsync(userId, cancellationToken);
             if (model == null)
             {
+                var notModelMsg = await _localizationService.GetStringAsync("model.register.not_model", cancellationToken);
                 await _telegramBotService.SendMessageAsync(
                     chatId,
-                    "You are not registered as a model yet. Use 'Become a Model' to register!",
+                    notModelMsg,
                     cancellationToken);
                 return;
             }
 
             if (model.Status != Domain.Entities.ModelStatus.Approved)
             {
+                var statusMsg = await _localizationService.GetStringAsync("model.status.not_approved", cancellationToken);
                 await _telegramBotService.SendMessageAsync(
                     chatId,
-                    $"Your model account is {model.Status}. Only approved models can access the dashboard.",
+                    string.Format(statusMsg, model.Status),
                     cancellationToken);
                 return;
             }
@@ -2359,26 +2361,26 @@ public partial class TelegramUpdateHandler
                 ? model.Alias 
                 : model.DisplayName;
             
-            var message = $"💰 **Revenue Dashboard: {modelDisplayText}**\n\n";
+            var message = await _localizationService.GetStringAsync("dashboard.title", modelDisplayText);
             
             // Revenue Section
-            message += "📊 **Revenue Overview:**\n";
-            message += $"   💵 Total Revenue: {analytics.TotalRevenueStars:N0} ⭐️\n";
-            message += $"   📅 This Month: {analytics.ThisMonthRevenueStars:N0} ⭐️\n";
-            message += $"   📆 Today: {analytics.TodayRevenueStars:N0} ⭐️\n";
-            message += $"   💰 Available Balance: {analytics.AvailableBalanceStars:N0} ⭐️\n\n";
+            message += await _localizationService.GetStringAsync("dashboard.revenue", 
+                analytics.TotalRevenueStars,
+                analytics.ThisMonthRevenueStars,
+                analytics.TodayRevenueStars,
+                analytics.AvailableBalanceStars);
             
             // Performance Metrics
-            message += "📈 **Performance Metrics:**\n";
-            message += $"   👥 Total Subscribers: {analytics.TotalSubscribers}\n";
-            message += $"   🛒 Total Sales: {analytics.TotalSales}\n";
-            message += $"   💸 Average Sale: {analytics.AverageSalePriceStars:N0} ⭐️\n";
-            message += $"   📊 Conversion Rate: {analytics.ConversionRate:F2}%\n\n";
+            message += await _localizationService.GetStringAsync("dashboard.metrics",
+                analytics.TotalSubscribers,
+                analytics.TotalSales,
+                analytics.AverageSalePriceStars,
+                analytics.ConversionRate);
             
             // Top Content (if available)
             if (analytics.TopOverallContent.Any())
             {
-                message += "🏆 **Top 3 Content Items:**\n";
+                message += await _localizationService.GetStringAsync("dashboard.top_content", cancellationToken);
                 var topItems = analytics.TopOverallContent.Take(3);
                 var rank = 1;
                 foreach (var item in topItems)
@@ -2392,7 +2394,7 @@ public partial class TelegramUpdateHandler
             // Payout History (last 3)
             if (analytics.PayoutHistory.Any())
             {
-                message += "💳 **Recent Payouts:**\n";
+                message += await _localizationService.GetStringAsync("dashboard.recent_payouts", cancellationToken);
                 var recentPayouts = analytics.PayoutHistory.Take(3);
                 foreach (var payout in recentPayouts)
                 {
@@ -2403,45 +2405,50 @@ public partial class TelegramUpdateHandler
             }
             else
             {
-                message += "💳 **No payouts yet**\n\n";
+                message += await _localizationService.GetStringAsync("dashboard.no_payouts", cancellationToken);
             }
 
             var buttons = new List<List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>>();
 
             // Row 1: Upload Content
+            var uploadPremiumText = await _localizationService.GetStringAsync("dashboard.upload_premium", cancellationToken);
+            var uploadDemoText = await _localizationService.GetStringAsync("dashboard.upload_demo", cancellationToken);
             buttons.Add(new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
             {
                 Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
-                    "📤 Upload Premium Content",
+                    uploadPremiumText,
                     "model_upload_premium"),
                 Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
-                    "🎁 Upload Demo",
+                    uploadDemoText,
                     "model_upload_demo")
             });
 
             // Row 2: Manage Content & Statistics
+            var myContentText = await _localizationService.GetStringAsync("dashboard.my_content", cancellationToken);
+            var contentStatsText = await _localizationService.GetStringAsync("dashboard.content_stats", cancellationToken);
             buttons.Add(new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
             {
                 Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
-                    "📋 My Content",
+                    myContentText,
                     "model_view_content"),
                 Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
-                    "📊 Content Stats",
+                    contentStatsText,
                     "model_content_statistics")
             });
 
             // Row 3: Top Content Analytics
+            var topContentText = await _localizationService.GetStringAsync("dashboard.top_content_btn", cancellationToken);
             buttons.Add(new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
             {
                 Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
-                    "🏆 Top Content",
+                    topContentText,
                     "model_top_content")
             });
 
             // Row 4: Profile Settings
             var aliasButtonText = string.IsNullOrWhiteSpace(model.Alias) 
-                ? "🏷️ Set Alias" 
-                : "🏷️ Change Alias";
+                ? await _localizationService.GetStringAsync("dashboard.set_alias", cancellationToken)
+                : await _localizationService.GetStringAsync("dashboard.change_alias", cancellationToken);
             buttons.Add(new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
             {
                 Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
@@ -2450,18 +2457,20 @@ public partial class TelegramUpdateHandler
             });
 
             // Row 5: Subscription Management
+            var manageSubText = await _localizationService.GetStringAsync("dashboard.manage_subscription", cancellationToken);
             buttons.Add(new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
             {
                 Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
-                    "💳 Manage Subscription Plan",
+                    manageSubText,
                     "model_manage_subscription")
             });
 
             // Row 6: Back button
+            var backText = await _localizationService.GetStringAsync("menu.back", cancellationToken);
             buttons.Add(new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
             {
                 Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
-                    "<< Back to Main Menu",
+                    backText,
                     "menu_back_main")
             });
 

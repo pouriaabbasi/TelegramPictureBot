@@ -10,9 +10,9 @@ public interface IModelTermsService
     string GetCurrentTermsVersion();
     
     /// <summary>
-    /// Get the full terms and conditions text
+    /// Get the full terms and conditions text (localized)
     /// </summary>
-    string GetTermsContent();
+    Task<string> GetTermsContentAsync(CancellationToken cancellationToken = default);
     
     /// <summary>
     /// Check if a model has accepted the terms

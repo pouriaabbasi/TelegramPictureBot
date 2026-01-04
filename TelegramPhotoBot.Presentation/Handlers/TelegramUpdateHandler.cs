@@ -478,10 +478,10 @@ public partial class TelegramUpdateHandler
         // Handle callbacks that don't require 3 parts (like reapply_model)
         if (parts.Length >= 2)
         {
-            var secondPart = parts[1];
+            var callbackSecondPart = parts[1];
             
             // Handle reapply_model callback (only needs 2 parts)
-            if (action == "reapply" && secondPart == "model")
+            if (action == "reapply" && callbackSecondPart == "model")
             {
                 await HandleReapplyModelAsync(user.Id, chatId, cancellationToken);
                 return;
@@ -1321,6 +1321,14 @@ public partial class TelegramUpdateHandler
     {
         try
         {
+            var user = await _userRepository.GetByIdAsync(userId, cancellationToken);
+            if (user == null)
+            {
+                var userNotFoundMsg = await _localizationService.GetStringAsync("user.not_found", cancellationToken);
+                await _telegramBotService.SendMessageAsync(chatId, userNotFoundMsg, cancellationToken);
+                return;
+            }
+            
             if (!Guid.TryParse(photoIdStr, out var photoId))
             {
                 await _telegramBotService.SendMessageAsync(
@@ -2520,7 +2528,7 @@ public partial class TelegramUpdateHandler
             {
                 var noSubsMessage = await _localizationService.GetStringAsync("subscription.none", cancellationToken);
                 var browseText = await _localizationService.GetStringAsync("menu.browse_models", cancellationToken);
-                var backText = await _localizationService.GetStringAsync("menu.back", cancellationToken);
+                var noSubsBackText = await _localizationService.GetStringAsync("menu.back", cancellationToken);
                 
                 var noSubsButtons = new List<List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>>
                 {
@@ -2533,7 +2541,7 @@ public partial class TelegramUpdateHandler
                     new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
                     {
                         Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
-                            backText,
+                            noSubsBackText,
                             "menu_back_main")
                     }
                 };
@@ -2607,14 +2615,14 @@ public partial class TelegramUpdateHandler
             if (!isAdmin)
             {
                 var noAccessMessage = await _localizationService.GetStringAsync("admin.no_permission", cancellationToken);
-                var backText = await _localizationService.GetStringAsync("menu.back", cancellationToken);
+                var adminBackText = await _localizationService.GetStringAsync("menu.back", cancellationToken);
                 
                 var noAccessButtons = new List<List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>>
                 {
                     new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
                     {
                         Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
-                            backText,
+                            adminBackText,
                             "menu_back_main")
                     }
                 };

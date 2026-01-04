@@ -2582,15 +2582,15 @@ public partial class TelegramUpdateHandler
             var isAdmin = await _authorizationService.IsAdminAsync(userId, cancellationToken);
             if (!isAdmin)
             {
-                var noAccessMessage = "You don't have admin permissions.\n\n" +
-                                     "Only administrators can access the admin panel.";
+                var noAccessMessage = await _localizationService.GetStringAsync("admin.no_permission", cancellationToken);
+                var backText = await _localizationService.GetStringAsync("menu.back", cancellationToken);
                 
                 var noAccessButtons = new List<List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>>
                 {
                     new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
                     {
                         Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
-                            "<< Back to Main Menu",
+                            backText,
                             "menu_back_main")
                     }
                 };
@@ -2603,8 +2603,8 @@ public partial class TelegramUpdateHandler
             var pendingModels = await _modelService.GetPendingApprovalModelsAsync(cancellationToken);
             var pendingList = pendingModels.ToList();
 
-            var message = "🛡️ Admin Panel\n\n";
-            message += $"📋 Pending Model Approvals: {pendingList.Count}\n\n";
+            var message = await _localizationService.GetStringAsync("admin.panel.title", cancellationToken);
+            message += $"\n\n📋 Pending Model Approvals: {pendingList.Count}\n\n";
 
             var buttons = new List<List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>>();
 
@@ -2650,10 +2650,13 @@ public partial class TelegramUpdateHandler
             }
             
             // Add platform settings and refresh buttons
+            var settingsText = await _localizationService.GetStringAsync("admin.settings", cancellationToken);
+            var backText = await _localizationService.GetStringAsync("menu.back", cancellationToken);
+            
             buttons.Add(new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
             {
                 Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
-                    "⚙️ Platform Settings",
+                    settingsText,
                     "admin_settings"),
                 Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
                     "🔄 Refresh",
@@ -2663,7 +2666,7 @@ public partial class TelegramUpdateHandler
             buttons.Add(new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
             {
                 Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
-                    "<< Back to Main Menu",
+                    backText,
                     "menu_back_main")
             });
 
@@ -2692,10 +2695,10 @@ public partial class TelegramUpdateHandler
     {
         try
         {
-            var message = "⚙️ Platform Settings\n\n" +
-                         "Configure MTProto credentials and platform settings.\n\n" +
-                         "⚠️ Note: Bot token must be configured in appsettings.json\n\n" +
-                         "Click on a setting to edit it:";
+            var message = await _localizationService.GetStringAsync("admin.settings.title", cancellationToken);
+            message += "\n\nConfigure MTProto credentials and platform settings.\n\n" +
+                     "⚠️ Note: Bot token must be configured in appsettings.json\n\n" +
+                     "Click on a setting to edit it:";
 
             var buttons = new List<List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>>();
 
@@ -2752,18 +2755,20 @@ public partial class TelegramUpdateHandler
             // Bot Language
             var currentLanguage = await _localizationService.GetBotLanguageAsync(cancellationToken);
             var languageText = currentLanguage == Domain.Enums.BotLanguage.Persian ? "🇮🇷 فارسی" : "🇬🇧 English";
+            var languageButtonText = await _localizationService.GetStringAsync("admin.language", cancellationToken);
             buttons.Add(new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
             {
                 Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
-                    $"🌐 Bot Language ({languageText})",
+                    $"{languageButtonText} ({languageText})",
                     "admin_language_settings")
             });
 
             // Back button
+            var backText = await _localizationService.GetStringAsync("menu.back", cancellationToken);
             buttons.Add(new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
             {
                 Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
-                    "<< Back to Admin Panel",
+                    backText.Replace("Main Menu", "Admin Panel"),
                     "menu_admin_panel")
             });
 

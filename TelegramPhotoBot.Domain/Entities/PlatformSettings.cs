@@ -63,6 +63,9 @@ public class PlatformSettings : BaseEntity
         // Single Model Mode Settings
         public const string SingleModelMode = "platform:single_model_mode";
         public const string DefaultModelId = "platform:default_model_id";
+        
+        // Localization
+        public const string BotLanguage = "platform:bot_language";
 
         /// <summary>
         /// Determines if a setting key contains sensitive data
@@ -96,6 +99,7 @@ public class PlatformSettings : BaseEntity
                 DefaultSelfDestructSeconds => "Default self-destruct timer for media (seconds)",
                 SingleModelMode => "Enable single model mode (true/false)",
                 DefaultModelId => "Default model ID for single model mode",
+                BotLanguage => "Bot language (Persian or English)",
                 _ => "Platform setting"
             };
         }

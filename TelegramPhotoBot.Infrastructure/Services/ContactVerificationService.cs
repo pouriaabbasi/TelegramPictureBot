@@ -48,6 +48,20 @@ public class ContactVerificationService : IContactVerificationService
                 _logger.LogInformation("Created new verification record for user {UserId}", recipientUser.Id);
             }
 
+            // Check if we can use cached result (only if mutual contact was confirmed and checked within last 24 hours)
+            var timeSinceLastCheck = DateTime.UtcNow - verification.LastCheckedAt;
+            var canUseCache = verification.IsMutualContact && timeSinceLastCheck.TotalHours < 24;
+
+            if (canUseCache)
+            {
+                _logger.LogInformation("✅ Using cached mutual contact status for user {UserId} (last checked {Hours} hours ago)", 
+                    recipientUser.Id, timeSinceLastCheck.TotalHours.ToString("F2"));
+                return ContactVerificationResult.Success();
+            }
+
+            _logger.LogInformation("🔄 Performing fresh contact check for user {UserId} (cache expired or not mutual)", 
+                recipientUser.Id);
+
             // Check contact status with MTProto
             var contactCheckResult = await _mtProtoService.CheckDetailedContactStatusAsync(
                 recipientTelegramUserId, 

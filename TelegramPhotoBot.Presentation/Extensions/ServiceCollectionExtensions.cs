@@ -25,6 +25,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ISingleModelModeService, SingleModelModeService>();
         services.AddScoped<IModelTermsService, ModelTermsService>();
         services.AddScoped<IRevenueAnalyticsService, RevenueAnalyticsService>();
+        services.AddScoped<ILocalizationService, LocalizationService>();
 
         // Marketplace Services
         services.AddScoped<IAuthorizationService, AuthorizationService>();

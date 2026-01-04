@@ -40,6 +40,7 @@ public partial class TelegramUpdateHandler
     private readonly ISingleModelModeService _singleModelModeService;
     private readonly IRevenueAnalyticsService _revenueAnalyticsService;
     private readonly IModelTermsService _modelTermsService;
+    private readonly ILocalizationService _localizationService;
 
     public TelegramUpdateHandler(
         IUserService userService,
@@ -66,7 +67,8 @@ public partial class TelegramUpdateHandler
         IServiceProvider serviceProvider,
         ISingleModelModeService singleModelModeService,
         IModelTermsService modelTermsService,
-        IRevenueAnalyticsService revenueAnalyticsService)
+        IRevenueAnalyticsService revenueAnalyticsService,
+        ILocalizationService localizationService)
     {
         _userService = userService ?? throw new ArgumentNullException(nameof(userService));
         _contentAuthorizationService = contentAuthorizationService ?? throw new ArgumentNullException(nameof(contentAuthorizationService));
@@ -93,6 +95,7 @@ public partial class TelegramUpdateHandler
         _singleModelModeService = singleModelModeService ?? throw new ArgumentNullException(nameof(singleModelModeService));
         _modelTermsService = modelTermsService ?? throw new ArgumentNullException(nameof(modelTermsService));
         _revenueAnalyticsService = revenueAnalyticsService ?? throw new ArgumentNullException(nameof(revenueAnalyticsService));
+        _localizationService = localizationService ?? throw new ArgumentNullException(nameof(localizationService));
     }
 
     /// <summary>
@@ -471,6 +474,19 @@ public partial class TelegramUpdateHandler
             }
         }
 
+        // Handle callbacks that don't require 3 parts (like reapply_model)
+        if (parts.Length >= 2)
+        {
+            var secondPart = parts[1];
+            
+            // Handle reapply_model callback (only needs 2 parts)
+            if (action == "reapply" && secondPart == "model")
+            {
+                await HandleReapplyModelAsync(user.Id, chatId, cancellationToken);
+                return;
+            }
+        }
+        
         if (parts.Length < 3) return;
         
         // Handle MTProto web setup
@@ -523,6 +539,11 @@ public partial class TelegramUpdateHandler
                 {
                     await HandleViewModelContentAsync(user.Id, viewContentModelId, chatId, cancellationToken);
                 }
+                else if (secondPart == "model" && parts.Length > 3 && parts[2] == "content" && Guid.TryParse(parts[3], out var viewModelContentId))
+                {
+                    // Handle view_model_content_{modelId} callback from subscription list
+                    await HandleViewModelContentAsync(user.Id, viewModelContentId, chatId, cancellationToken);
+                }
                 else if (secondPart == "demo" && Guid.TryParse(thirdPart, out var viewDemoModelId))
                 {
                     await HandleViewDemoContentAsync(user.Id, viewDemoModelId, chatId, cancellationToken);
@@ -549,6 +570,14 @@ public partial class TelegramUpdateHandler
                 {
                     await HandleAdminSettingsAsync(chatId, cancellationToken);
                 }
+                else if (secondPart == "language" && thirdPart == "settings")
+                {
+                    await HandleAdminLanguageSettingsAsync(user.Id, chatId, cancellationToken);
+                }
+                else if (secondPart == "language" && parts.Length > 3 && Enum.TryParse<Domain.Enums.BotLanguage>(parts[3], out var selectedLanguage))
+                {
+                    await HandleAdminSetLanguageAsync(user.Id, chatId, selectedLanguage, cancellationToken);
+                }
                 else if (secondPart == "single" && thirdPart == "model" && parts.Length > 3)
                 {
                     var fourthPart = parts[3];
@@ -564,14 +593,6 @@ public partial class TelegramUpdateHandler
                     {
                         await HandleAdminDisableSingleModelModeAsync(user.Id, chatId, cancellationToken);
                     }
-                }
-                break;
-
-            case "reapply":
-                if (secondPart == "model")
-                {
-                    // No need for modelId, we use the userId to find their rejected model
-                    await HandleReapplyModelAsync(user.Id, chatId, cancellationToken);
                 }
                 break;
 
@@ -2705,6 +2726,16 @@ public partial class TelegramUpdateHandler
                     $"admin_setting_edit_{PlatformSettings.Keys.DefaultSelfDestructSeconds.Replace(":", "_")}")
             });
 
+            // Bot Language
+            var currentLanguage = await _localizationService.GetBotLanguageAsync(cancellationToken);
+            var languageText = currentLanguage == Domain.Enums.BotLanguage.Persian ? "🇮🇷 فارسی" : "🇬🇧 English";
+            buttons.Add(new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
+            {
+                Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
+                    $"🌐 Bot Language ({languageText})",
+                    "admin_language_settings")
+            });
+
             // Back button
             buttons.Add(new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
             {
@@ -2719,6 +2750,77 @@ public partial class TelegramUpdateHandler
         catch (Exception ex)
         {
             await _telegramBotService.SendMessageAsync(chatId, $"Error loading settings: {ex.Message}", cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// Handles bot language settings
+    /// </summary>
+    private async Task HandleAdminLanguageSettingsAsync(Guid userId, long chatId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var currentLanguage = await _localizationService.GetBotLanguageAsync(cancellationToken);
+            var currentLanguageText = currentLanguage == Domain.Enums.BotLanguage.Persian ? "فارسی" : "English";
+            
+            var message = await _localizationService.GetStringAsync("admin.settings.language.current", currentLanguageText);
+            message += "\n\n";
+            message += await _localizationService.GetStringAsync("admin.settings.language.select");
+            
+            var buttons = new List<List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>>
+            {
+                new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
+                {
+                    Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
+                        await _localizationService.GetStringAsync("admin.settings.language.persian"),
+                        "admin_language_Persian"),
+                    Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
+                        await _localizationService.GetStringAsync("admin.settings.language.english"),
+                        "admin_language_English")
+                },
+                new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
+                {
+                    Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
+                        "<< Back to Settings",
+                        "admin_settings")
+                }
+            };
+            
+            var keyboard = new Telegram.Bot.Types.ReplyMarkups.InlineKeyboardMarkup(buttons);
+            await _telegramBotService.SendMessageWithButtonsAsync(chatId, message, keyboard, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            await _telegramBotService.SendMessageAsync(chatId, $"Error loading language settings: {ex.Message}", cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// Sets the bot language
+    /// </summary>
+    private async Task HandleAdminSetLanguageAsync(Guid userId, long chatId, Domain.Enums.BotLanguage language, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _localizationService.SetBotLanguageAsync(language, cancellationToken);
+            var message = await _localizationService.GetStringAsync("admin.settings.language.updated");
+            
+            var buttons = new List<List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>>
+            {
+                new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
+                {
+                    Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
+                        "<< Back to Settings",
+                        "admin_settings")
+                }
+            };
+            
+            var keyboard = new Telegram.Bot.Types.ReplyMarkups.InlineKeyboardMarkup(buttons);
+            await _telegramBotService.SendMessageWithButtonsAsync(chatId, message, keyboard, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            await _telegramBotService.SendMessageAsync(chatId, $"Error setting language: {ex.Message}", cancellationToken);
         }
     }
 

@@ -342,9 +342,10 @@ public partial class TelegramUpdateHandler
             // Try to send error message to user
             try
             {
+                var errorMsg = await _localizationService.GetStringAsync("common.error", cancellationToken);
                 await _telegramBotService.SendMessageAsync(
                     message.ChatId,
-                    "❌ خطا در پردازش پیام شما. لطفاً دوباره تلاش کنید.",
+                    errorMsg,
                     cancellationToken);
             }
             catch (Exception sendEx)
@@ -762,9 +763,7 @@ public partial class TelegramUpdateHandler
             var isSingleModelMode = await _singleModelModeService.IsSingleModelModeAsync(cancellationToken);
             var defaultModel = isSingleModelMode ? await _singleModelModeService.GetDefaultModelAsync(cancellationToken) : null;
 
-            var message = "Welcome to Premium Content Marketplace!\n\n" +
-                         "Browse content creators, subscribe to your favorites, and access exclusive content!\n\n" +
-                         "Choose an option below:";
+            var message = await _localizationService.GetStringAsync("menu.welcome", cancellationToken);
 
             Console.WriteLine($"📝 Message prepared, building buttons...");
             var buttons = new List<List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>>();
@@ -778,42 +777,47 @@ public partial class TelegramUpdateHandler
                 : defaultModel.DisplayName;
             
             // In single model mode, show direct link to model content
+            var buttonText = await _localizationService.GetStringAsync("menu.view_model_content", modelDisplayText);
             buttons.Add(new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
             {
                 Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
-                    $"📸 View {modelDisplayText}'s Content",
+                    buttonText,
                     $"view_model_{defaultModel.Id}")
             });
         }
         else
         {
             // Normal mode: Show Browse Models
+            var browseText = await _localizationService.GetStringAsync("menu.browse_models", cancellationToken);
             buttons.Add(new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
             {
                 Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
-                    "🔍 Browse Models",
+                    browseText,
                     "menu_browse_models")
             });
         }
 
         // Row 2: My Subscriptions & My Content
+        var subscriptionsText = await _localizationService.GetStringAsync("menu.my_subscriptions", cancellationToken);
+        var myContentText = await _localizationService.GetStringAsync("menu.my_content", cancellationToken);
         buttons.Add(new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
         {
             Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
-                "💎 My Subscriptions",
+                subscriptionsText,
                 "menu_my_subscriptions"),
             Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
-                "📁 My Content",
+                myContentText,
                 "menu_my_content")
         });
 
         // Row 4: Become a Model (if not already a model and not in single model mode)
         if (!isModel && !isAdmin && !isSingleModelMode)
         {
+            var becomeModelText = await _localizationService.GetStringAsync("menu.become_model", cancellationToken);
             buttons.Add(new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
             {
                 Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
-                    "⭐ Become a Model",
+                    becomeModelText,
                     "menu_register_model")
             });
         }
@@ -821,10 +825,11 @@ public partial class TelegramUpdateHandler
         // Row 5: Model Dashboard (if model)
         if (isModel)
         {
+            var dashboardText = await _localizationService.GetStringAsync("menu.model_dashboard", cancellationToken);
             buttons.Add(new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
             {
                 Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
-                    "📊 Model Dashboard",
+                    dashboardText,
                     "menu_model_dashboard")
             });
         }
@@ -834,9 +839,10 @@ public partial class TelegramUpdateHandler
         {
             var pendingModels = await _modelService.GetPendingApprovalModelsAsync(cancellationToken);
             var pendingCount = pendingModels.Count();
+            var adminPanelText = await _localizationService.GetStringAsync("menu.admin_panel", cancellationToken);
             var adminButtonText = pendingCount > 0 
-                ? $"🛡️ Admin Panel ({pendingCount} pending)" 
-                : "🛡️ Admin Panel";
+                ? $"{adminPanelText} ({pendingCount} pending)" 
+                : adminPanelText;
             
             buttons.Add(new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
             {

@@ -15,6 +15,12 @@ public class LocalizationService : ILocalizationService
     // Complete dictionary of all localized strings
     private static readonly Dictionary<string, Dictionary<BotLanguage, string>> _strings = new()
     {
+        ["common.back_to_main"] = new()
+        {
+            { BotLanguage.Persian, "🏠 بازگشت به منوی اصلی" },
+            { BotLanguage.English, "🏠 Back to Main Menu" }
+        },
+        
         #region Main Menu
         ["menu.welcome"] = new()
         {
@@ -1037,6 +1043,83 @@ Date: 2025-01-01" }
         {
             { BotLanguage.Persian, "⭐ مدل شوید" },
             { BotLanguage.English, "⭐ Become a Model" }
+        },
+        #endregion
+        
+        #region Model Status & Info
+        ["model.status.new_content_creator"] = new()
+        {
+            { BotLanguage.Persian, "🆕 سازنده محتوای جدید" },
+            { BotLanguage.English, "🆕 New content creator" }
+        },
+        #endregion
+        
+        #region Admin Panel
+        ["admin.pending_approvals.title"] = new()
+        {
+            { BotLanguage.Persian, "📋 درخواست‌های مدل در انتظار تایید: {0}" },
+            { BotLanguage.English, "📋 Pending Model Approvals: {0}" }
+        },
+        ["admin.pending_approvals.none"] = new()
+        {
+            { BotLanguage.Persian, "✅ هیچ درخواستی در انتظار تایید نیست." },
+            { BotLanguage.English, "✅ No pending approvals at this time." }
+        },
+        ["admin.button.refresh"] = new()
+        {
+            { BotLanguage.Persian, "🔄 بروزرسانی" },
+            { BotLanguage.English, "🔄 Refresh" }
+        },
+        ["admin.settings.title"] = new()
+        {
+            { BotLanguage.Persian, "⚙️ **تنظیمات پلتفرم**" },
+            { BotLanguage.English, "⚙️ **Platform Settings**" }
+        },
+        ["admin.settings.description"] = new()
+        {
+            { BotLanguage.Persian, "پیکربندی اعتبارنامه‌های MTProto و تنظیمات پلتفرم.\n\n⚠️ توجه: Bot Token باید در appsettings.json پیکربندی شود\n\nبرای ویرایش روی یک تنظیم کلیک کنید:" },
+            { BotLanguage.English, "Configure MTProto credentials and platform settings.\n\n⚠️ Note: Bot token must be configured in appsettings.json\n\nClick on a setting to edit it:" }
+        },
+        #endregion
+        
+        #region Upload Content
+        ["upload.title"] = new()
+        {
+            { BotLanguage.Persian, "📤 آپلود محتوای پریمیوم" },
+            { BotLanguage.English, "📤 Upload Premium Content" }
+        },
+        ["upload.instructions"] = new()
+        {
+            { BotLanguage.Persian, "یک عکس یا ویدیو که می‌خواهید بفروشید برای من ارسال کنید.\n\nبعد از آپلود، از شما خواسته می‌شود:\n• قیمت (به ستاره تلگرام)\n• توضیحات (توضیحات اختیاری)\n\nاین محتوا برای خرید یا برای مشترکین در دسترس خواهد بود.\n\n📸 اکنون رسانه خود را ارسال کنید:" },
+            { BotLanguage.English, "Send me a photo or video that you want to sell.\n\nAfter uploading, I'll ask you to set:\n• Price (in Telegram Stars)\n• Caption (optional description)\n\nThis content will be available for purchase or to subscribers.\n\n📸 Send your media now:" }
+        },
+        #endregion
+        
+        #region My Content
+        ["content.my_content.title"] = new()
+        {
+            { BotLanguage.Persian, "📂 محتوای شما:" },
+            { BotLanguage.English, "📂 Your Available Content:" }
+        },
+        ["content.view_button"] = new()
+        {
+            { BotLanguage.Persian, "👁️ مشاهده" },
+            { BotLanguage.English, "👁️ View" }
+        },
+        ["content.subscription_label"] = new()
+        {
+            { BotLanguage.Persian, "    💳 اشتراک" },
+            { BotLanguage.English, "    💳 Subscription" }
+        },
+        ["content.demo_label"] = new()
+        {
+            { BotLanguage.Persian, " 🎁 محتوای دمو" },
+            { BotLanguage.English, " 🎁 Demo Content" }
+        },
+        ["content.view_instruction"] = new()
+        {
+            { BotLanguage.Persian, "💡 برای دریافت عکس با تایمر خودکار حذف روی 'مشاهده' کلیک کنید." },
+            { BotLanguage.English, "💡 Click 'View' to receive the photo with self-destruct timer." }
         }
         #endregion
     };

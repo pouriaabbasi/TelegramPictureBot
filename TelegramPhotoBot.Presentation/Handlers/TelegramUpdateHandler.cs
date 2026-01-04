@@ -1020,7 +1020,8 @@ public partial class TelegramUpdateHandler
                 return;
             }
 
-            var message = " Your Available Content:\n\n";
+            var message = await _localizationService.GetStringAsync("content.my_content.title", cancellationToken);
+            message += "\n";
             var buttons = new List<List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>>();
             var hasAccess = false;
 
@@ -1034,14 +1035,17 @@ public partial class TelegramUpdateHandler
                 if (accessResult.HasAccess)
                 {
                     hasAccess = true;
-                    message += $" {photo.Caption ?? "Untitled"}\n";
-                    message += $"   {(accessResult.AccessType == ContentAccessType.Subscription ? " Subscription" : " Purchased")}\n\n";
+                    var subscriptionLabel = await _localizationService.GetStringAsync("content.subscription_label", cancellationToken);
+                    
+                    message += $"{photo.Caption ?? "Untitled"}\n";
+                    message += $"{(accessResult.AccessType == ContentAccessType.Subscription ? subscriptionLabel : "    ✅ Purchased")}\n\n";
 
                     // Add view button
+                    var viewBtnText = await _localizationService.GetStringAsync("content.view_button", cancellationToken);
                     buttons.Add(new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
                         {
                             Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
-                                $" View: {photo.Caption ?? "Photo"}",
+                                $"{viewBtnText}: {photo.Caption ?? "Photo"}",
                                 $"view_photo_{photo.Id}")
                         });
                 }
@@ -1051,19 +1055,21 @@ public partial class TelegramUpdateHandler
             {
                 var noAccessMessage = "You don't have access to any content yet.\n\n" +
                                      "Browse models and subscribe to access their exclusive content!";
+                var browseText = await _localizationService.GetStringAsync("menu.browse_models", cancellationToken);
+                var backText = await _localizationService.GetStringAsync("common.back_to_main", cancellationToken);
                 
                 var noAccessButtons = new List<List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>>
                 {
                     new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
                     {
                         Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
-                            "Browse Models",
+                            browseText,
                             "menu_browse_models")
                     },
                     new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
                     {
                         Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
-                            "<< Back to Main Menu",
+                            backText,
                             "menu_back_main")
                     }
                 };
@@ -1073,7 +1079,8 @@ public partial class TelegramUpdateHandler
                 return;
             }
 
-            message += "\n Click 'View' to receive the photo with self-destruct timer.";
+            var viewInstruction = await _localizationService.GetStringAsync("content.view_instruction", cancellationToken);
+            message += $"\n{viewInstruction}";
 
             var keyboard = new Telegram.Bot.Types.ReplyMarkups.InlineKeyboardMarkup(buttons);
             await _telegramBotService.SendMessageWithButtonsAsync(chatId, message, keyboard, cancellationToken);
@@ -2320,7 +2327,8 @@ public partial class TelegramUpdateHandler
             }
 
             // Register the model
-            var model = await _modelService.RegisterModelAsync(userId, displayName, "New content creator", cancellationToken);
+            var newCreatorBio = await _localizationService.GetStringAsync("model.status.new_content_creator", cancellationToken);
+            var model = await _modelService.RegisterModelAsync(userId, displayName, newCreatorBio, cancellationToken);
             
             // Record terms acceptance
             await _modelTermsService.RecordAcceptanceAsync(model.Id, cancellationToken);
@@ -2650,7 +2658,8 @@ public partial class TelegramUpdateHandler
             var pendingList = pendingModels.ToList();
 
             var message = await _localizationService.GetStringAsync("admin.panel.title", cancellationToken);
-            message += $"\n\n📋 Pending Model Approvals: {pendingList.Count}\n\n";
+            var pendingTitle = await _localizationService.GetStringAsync("admin.pending_approvals.title", pendingList.Count.ToString());
+            message += $"\n\n{pendingTitle}\n\n";
 
             var buttons = new List<List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>>();
 
@@ -2697,6 +2706,7 @@ public partial class TelegramUpdateHandler
             
             // Add platform settings and refresh buttons
             var settingsText = await _localizationService.GetStringAsync("admin.settings", cancellationToken);
+            var refreshText = await _localizationService.GetStringAsync("admin.button.refresh", cancellationToken);
             var backText = await _localizationService.GetStringAsync("menu.back", cancellationToken);
             
             buttons.Add(new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
@@ -2705,7 +2715,7 @@ public partial class TelegramUpdateHandler
                     settingsText,
                     "admin_settings"),
                 Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
-                    "🔄 Refresh",
+                    refreshText,
                     "menu_admin_panel")
             });
             
@@ -2723,7 +2733,8 @@ public partial class TelegramUpdateHandler
             }
             else
             {
-                message += "✅ No pending approvals at this time.";
+                var noPendingMsg = await _localizationService.GetStringAsync("admin.pending_approvals.none", cancellationToken);
+                message += noPendingMsg;
                 var keyboard = new Telegram.Bot.Types.ReplyMarkups.InlineKeyboardMarkup(buttons);
                 await _telegramBotService.SendMessageWithButtonsAsync(chatId, message, keyboard, cancellationToken);
             }
@@ -2743,9 +2754,8 @@ public partial class TelegramUpdateHandler
         try
         {
             var message = await _localizationService.GetStringAsync("admin.settings.title", cancellationToken);
-            message += "\n\nConfigure MTProto credentials and platform settings.\n\n" +
-                     "⚠️ Note: Bot token must be configured in appsettings.json\n\n" +
-                     "Click on a setting to edit it:";
+            var description = await _localizationService.GetStringAsync("admin.settings.description", cancellationToken);
+            message += $"\n\n{description}";
 
             var buttons = new List<List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>>();
 
@@ -3388,13 +3398,9 @@ public partial class TelegramUpdateHandler
                 return;
             }
 
-            var message = "📤 Upload Premium Content\n\n" +
-                         "Send me a photo or video that you want to sell.\n\n" +
-                         "After uploading, I'll ask you to set:\n" +
-                         "• Price (in Telegram Stars)\n" +
-                         "• Caption (optional description)\n\n" +
-                         "This content will be available for purchase or to subscribers.\n\n" +
-                         "📸 Send your media now:";
+            var message = await _localizationService.GetStringAsync("upload.title", cancellationToken);
+            message += "\n\n";
+            message += await _localizationService.GetStringAsync("upload.instructions", cancellationToken);
 
             await _telegramBotService.SendMessageAsync(chatId, message, cancellationToken);
             

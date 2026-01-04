@@ -523,6 +523,195 @@ By clicking 'I Accept' you confirm that you have read and accept these terms." }
             { BotLanguage.English, "✅ Your alias has been cleared. Your real name will now be displayed." }
         },
         #endregion
+
+        #region Model Terms & Conditions - Full Legal Text
+        ["terms.title"] = new()
+        {
+            { BotLanguage.Persian, "📜 **شرایط و قوانین ثبت‌نام به عنوان مدل**\n\n" },
+            { BotLanguage.English, "📜 **Model Registration Terms & Conditions**\n\n" }
+        },
+        ["terms.content.persian"] = new()
+        {
+            { BotLanguage.Persian, 
+@"با عضویت به عنوان مدل در پلتفرم، شما با شرایط زیر موافقت می‌کنید:
+
+━━━━━━━━━━━━━━━━━━━━━━━━
+
+💰 کارمزد و درآمد:
+
+• پلتفرم 15% از فروش محتوای شما را به عنوان کارمزد دریافت می‌کند
+• 85% از درآمد به شما تعلق می‌گیرد
+• مثال: برای هر 100 Stars فروش، 85 Stars به حساب شما واریز می‌شود
+
+💳 هزینه انتقال:
+
+• هزینه کارمزد انتقال وجه (Transfer Fee) به صورت مساوی بین مدل و پلتفرم تقسیم می‌شود
+• مثال: اگر کارمزد انتقال 50 Stars باشد، 25 Stars از موجودی شما و 25 Stars توسط پلتفرم پرداخت می‌شود
+• این هزینه شامل کارمزد بانکی، تبدیل ارز، و سایر هزینه‌های انتقال است
+
+━━━━━━━━━━━━━━━━━━━━━━━━
+
+💰 تسویه‌حساب:
+
+• تسویه به صورت ماهانه انجام می‌شود
+• حداقل موجودی برای برداشت: 1,000 Stars
+• روش پرداخت: انتقال بانکی، کارت به کارت، یا سایر روش‌های توافقی
+• تسویه تا 7 روز کاری پس از درخواست انجام می‌شود
+• مبلغ نهایی پرداختی = (موجودی شما) - (50% هزینه انتقال)
+
+━━━━━━━━━━━━━━━━━━━━━━━━
+
+📸 قوانین محتوا:
+
+• محتوای غیرقانونی، تهدیدآمیز، یا توهین‌آمیز ممنوع است
+• محتوای حق نشر دار متعلق به دیگران ممنوع است
+• محتوای مغایر با قوانین تلگرام ممنوع است
+• قیمت‌گذاری منصفانه و متناسب با محتوا الزامی است
+• پلتفرم حق حذف یا تعلیق محتوای نامناسب را دارد
+
+━━━━━━━━━━━━━━━━━━━━━━━━
+
+🛡️ مسئولیت‌ها:
+
+• شما مسئول صحت اطلاعات ارائه شده هستید
+• شما مسئول محتوایی که منتشر می‌کنید هستید
+• پلتفرم مسئولیتی در قبال مشکلات قانونی ناشی از محتوای شما ندارد
+• حفاظت از اطلاعات حساب کاربری به عهده شما است
+
+━━━━━━━━━━━━━━━━━━━━━━━━
+
+⚖️ سایر شرایط:
+
+• پلتفرم حق تغییر شرایط را با اطلاع قبلی دارد
+• نقض قوانین می‌تواند منجر به تعلیق یا حذف حساب شود
+• شما می‌توانید هر زمان درخواست حذف حساب دهید
+• پس از حذف حساب، موجودی باقی‌مانده پرداخت می‌شود
+
+━━━━━━━━━━━━━━━━━━━━━━━━
+
+📝 ثبت قانونی:
+
+• تاریخ و ساعت دقیق پذیرش این شرایط ثبت و نگهداری می‌شود
+• محتوای دقیق شرایطی که شما پذیرفته‌اید در سیستم ذخیره می‌شود
+• این اطلاعات برای مسائل حقوقی احتمالی قابل استناد است
+
+━━━━━━━━━━━━━━━━━━━━━━━━
+
+📞 پشتیبانی:
+
+در صورت هرگونه سؤال یا مشکل، با پشتیبانی تماس بگیرید.
+
+━━━━━━━━━━━━━━━━━━━━━━━━
+
+✅ با انتخاب 'قبول می‌کنم'، تأیید می‌کنید که:
+• تمام شرایط بالا را خوانده و فهمیده‌اید
+• با تمام موارد از جمله کارمزد 15% و تقسیم هزینه انتقال موافق هستید
+• متعهد به رعایت قوانین پلتفرم هستید
+• از ثبت این توافق در سیستم آگاه و موافق هستید
+
+نسخه شرایط: 1.0
+تاریخ: 2025-01-01" },
+            { BotLanguage.English, "" }
+        },
+        ["terms.content.english"] = new()
+        {
+            { BotLanguage.Persian, "" },
+            { BotLanguage.English,
+@"By joining as a model on the platform, you agree to the following terms:
+
+━━━━━━━━━━━━━━━━━━━━━━━━
+
+💰 Commission and Revenue:
+
+• The platform receives 15% commission from your content sales
+• 85% of revenue belongs to you
+• Example: For every 100 Stars sale, 85 Stars will be deposited to your account
+
+💳 Transfer Fees:
+
+• Transfer fees are split equally between the model and the platform
+• Example: If transfer fee is 50 Stars, 25 Stars from your balance and 25 Stars by the platform will be paid
+• This fee includes bank charges, currency conversion, and other transfer costs
+
+━━━━━━━━━━━━━━━━━━━━━━━━
+
+💰 Settlement:
+
+• Settlement is done monthly
+• Minimum balance for withdrawal: 1,000 Stars
+• Payment method: Bank transfer, card to card, or other agreed methods
+• Settlement is completed within 7 business days after request
+• Final payment amount = (Your balance) - (50% transfer fee)
+
+━━━━━━━━━━━━━━━━━━━━━━━━
+
+📸 Content Rules:
+
+• Illegal, threatening, or offensive content is prohibited
+• Copyrighted content belonging to others is prohibited
+• Content violating Telegram rules is prohibited
+• Fair and appropriate pricing is mandatory
+• The platform reserves the right to remove or suspend inappropriate content
+
+━━━━━━━━━━━━━━━━━━━━━━━━
+
+🛡️ Responsibilities:
+
+• You are responsible for the accuracy of provided information
+• You are responsible for the content you publish
+• The platform has no liability for legal issues arising from your content
+• Protecting your account information is your responsibility
+
+━━━━━━━━━━━━━━━━━━━━━━━━
+
+⚖️ Other Terms:
+
+• The platform reserves the right to change terms with prior notice
+• Violation of rules may result in account suspension or deletion
+• You can request account deletion at any time
+• After account deletion, remaining balance will be paid
+
+━━━━━━━━━━━━━━━━━━━━━━━━
+
+📝 Legal Registration:
+
+• The exact date and time of accepting these terms will be recorded and maintained
+• The exact content of the terms you accepted will be stored in the system
+• This information can be referenced for potential legal matters
+
+━━━━━━━━━━━━━━━━━━━━━━━━
+
+📞 Support:
+
+For any questions or issues, contact support.
+
+━━━━━━━━━━━━━━━━━━━━━━━━
+
+✅ By selecting 'I Accept', you confirm that:
+• You have read and understood all the above terms
+• You agree to all terms including 15% commission and transfer fee split
+• You are committed to following the platform rules
+• You are aware of and agree to this agreement being recorded in the system
+
+Terms version: 1.0
+Date: 2025-01-01" }
+        },
+        ["terms.accept"] = new()
+        {
+            { BotLanguage.Persian, "✅ قبول می‌کنم" },
+            { BotLanguage.English, "✅ I Accept" }
+        },
+        ["terms.decline"] = new()
+        {
+            { BotLanguage.Persian, "❌ نمی‌پذیرم" },
+            { BotLanguage.English, "❌ I Decline" }
+        },
+        ["terms.declined"] = new()
+        {
+            { BotLanguage.Persian, "شما شرایط را نپذیرفتید. بدون پذیرش شرایط نمی‌توانید به عنوان مدل ثبت‌نام کنید." },
+            { BotLanguage.English, "You declined the terms. You cannot register as a model without accepting the terms." }
+        },
+        #endregion
     };
     
     public LocalizationService(

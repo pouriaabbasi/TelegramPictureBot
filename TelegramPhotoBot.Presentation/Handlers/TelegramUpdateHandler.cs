@@ -2233,21 +2233,24 @@ public partial class TelegramUpdateHandler
     /// </summary>
     private async Task ShowModelTermsAndConditionsAsync(Guid userId, long chatId, CancellationToken cancellationToken)
     {
-        var termsContent = _modelTermsService.GetTermsContent();
+        var termsContent = await _modelTermsService.GetTermsContentAsync(cancellationToken);
+        
+        var acceptText = await _localizationService.GetStringAsync("terms.accept", cancellationToken);
+        var declineText = await _localizationService.GetStringAsync("terms.decline", cancellationToken);
         
         var buttons = new List<List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>>
         {
             new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
             {
                 Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
-                    "✅ قبول و ادامه",
+                    acceptText,
                     $"terms_accept_{userId}"),
                 Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
-                    "❌ انصراف",
+                    declineText,
                     "menu_back_main")
             }
         };
-        
+
         var keyboard = new Telegram.Bot.Types.ReplyMarkups.InlineKeyboardMarkup(buttons);
         await _telegramBotService.SendMessageWithButtonsAsync(chatId, termsContent, keyboard, cancellationToken);
     }

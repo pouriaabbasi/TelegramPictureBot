@@ -1818,7 +1818,8 @@ public partial class TelegramUpdateHandler
             var model = await _modelDiscoveryService.GetModelProfileAsync(modelId, cancellationToken);
             if (model == null)
             {
-                await _telegramBotService.SendMessageAsync(chatId, "Model not found or not available.", cancellationToken);
+                var notFoundMsg = await _localizationService.GetStringAsync("model.profile.not_found", cancellationToken);
+                await _telegramBotService.SendMessageAsync(chatId, notFoundMsg, cancellationToken);
                 return;
             }
 
@@ -1840,12 +1841,20 @@ public partial class TelegramUpdateHandler
             {
                 message += $"{model.Bio}\n\n";
             }
-            message += $"📈 Statistics:\n";
-            message += $"👥 Subscribers: {stats.TotalSubscribers}\n";
-            message += $"📸 Content: {stats.PremiumPhotos} premium photos\n";
+            
+            var statisticsLabel = await _localizationService.GetStringAsync("model.profile.statistics", cancellationToken);
+            message += $"{statisticsLabel}\n";
+            
+            var subscribersText = await _localizationService.GetStringAsync("model.profile.subscribers", stats.TotalSubscribers.ToString());
+            message += $"{subscribersText}\n";
+            
+            var contentText = await _localizationService.GetStringAsync("model.profile.content", stats.PremiumPhotos.ToString());
+            message += $"{contentText}\n";
+            
             if (demoList.Any())
             {
-                message += $"🎁 Demo Content: {demoList.Count} free preview(s)\n";
+                var demoText = await _localizationService.GetStringAsync("model.profile.demo_content", demoList.Count.ToString());
+                message += $"{demoText}\n";
             }
             message += "\n";
 
@@ -1854,10 +1863,11 @@ public partial class TelegramUpdateHandler
             // Demo content button (always visible if demo exists)
             if (demoList.Any())
             {
+                var viewDemoText = await _localizationService.GetStringAsync("model.profile.view_demo", cancellationToken);
                 buttons.Add(new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
                 {
                     Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
-                        "🎁 View Free Demo",
+                        viewDemoText,
                         $"view_demo_{model.Id}")
                 });
             }
@@ -1865,11 +1875,14 @@ public partial class TelegramUpdateHandler
             // If user already has subscription, show access to content
             if (hasSubscription)
             {
-                message += "✅ You are subscribed!\n\n";
+                var subscribedMsg = await _localizationService.GetStringAsync("model.profile.subscribed", cancellationToken);
+                message += $"{subscribedMsg}\n\n";
+                
+                var viewMyContentText = await _localizationService.GetStringAsync("model.profile.view_my_content", cancellationToken);
                 buttons.Add(new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
                 {
                     Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
-                        "📂 View My Content",
+                        viewMyContentText,
                         $"view_content_{model.Id}")
                 });
             }
@@ -1878,13 +1891,17 @@ public partial class TelegramUpdateHandler
                 // Subscription button if available
                 if (stats.HasSubscriptionAvailable && stats.SubscriptionPrice.HasValue)
                 {
-                    message += $"💰 Subscribe for {stats.SubscriptionPrice} stars/{stats.SubscriptionDurationDays} days\n";
-                    message += "Get access to all content!\n\n";
+                    var subscribeOffer = await _localizationService.GetStringAsync("model.profile.subscribe_offer", 
+                        stats.SubscriptionPrice.Value.ToString(), 
+                        stats.SubscriptionDurationDays.ToString());
+                    message += subscribeOffer;
                     
+                    var subscribeButtonText = await _localizationService.GetStringAsync("model.profile.subscribe_button", 
+                        stats.SubscriptionPrice.Value.ToString());
                     buttons.Add(new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
                     {
                         Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
-                            $"💳 Subscribe ({stats.SubscriptionPrice} stars)",
+                            subscribeButtonText,
                             $"sub_model_{model.Id}")
                     });
                 }
@@ -1892,14 +1909,17 @@ public partial class TelegramUpdateHandler
                 // Photo buttons for individual purchase
                 if (photosList.Any())
                 {
-                    message += $"📸 Available Photos:\n";
+                    var availablePhotosText = await _localizationService.GetStringAsync("model.profile.available_photos", cancellationToken);
+                    message += $"{availablePhotosText}\n";
                     foreach (var photo in photosList.Take(5))
                     {
                         message += $"  • {photo.Caption ?? "Photo"} ({photo.Price.Amount} stars)\n";
+                        
+                        var buyButtonText = await _localizationService.GetStringAsync("model.profile.buy_button", photo.Caption ?? "Photo");
                         buttons.Add(new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
                         {
                             Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
-                                $"🛒 Buy: {photo.Caption ?? "Photo"}",
+                                buyButtonText,
                                 $"buy_photo_{photo.Id}")
                         });
                     }
@@ -1907,10 +1927,11 @@ public partial class TelegramUpdateHandler
             }
 
             // Back button
+            var backToModelsText = await _localizationService.GetStringAsync("model.profile.back_to_models", cancellationToken);
             buttons.Add(new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
             {
                 Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
-                    "<< Back to Models",
+                    backToModelsText,
                     "menu_browse_models")
             });
 

@@ -1120,6 +1120,74 @@ Date: 2025-01-01" }
         {
             { BotLanguage.Persian, "💡 برای دریافت عکس با تایمر خودکار حذف روی 'مشاهده' کلیک کنید." },
             { BotLanguage.English, "💡 Click 'View' to receive the photo with self-destruct timer." }
+        },
+        #endregion
+        
+        #region Model Profile View
+        ["model.profile.not_found"] = new()
+        {
+            { BotLanguage.Persian, "❌ مدل یافت نشد یا در دسترس نیست." },
+            { BotLanguage.English, "❌ Model not found or not available." }
+        },
+        ["model.profile.statistics"] = new()
+        {
+            { BotLanguage.Persian, "📈 آمار:" },
+            { BotLanguage.English, "📈 Statistics:" }
+        },
+        ["model.profile.subscribers"] = new()
+        {
+            { BotLanguage.Persian, "👥 مشترکین: {0}" },
+            { BotLanguage.English, "👥 Subscribers: {0}" }
+        },
+        ["model.profile.content"] = new()
+        {
+            { BotLanguage.Persian, "📸 محتوا: {0} عکس پریمیوم" },
+            { BotLanguage.English, "📸 Content: {0} premium photos" }
+        },
+        ["model.profile.demo_content"] = new()
+        {
+            { BotLanguage.Persian, "🎁 محتوای دمو: {0} پیش‌نمایش رایگان" },
+            { BotLanguage.English, "🎁 Demo Content: {0} free preview(s)" }
+        },
+        ["model.profile.view_demo"] = new()
+        {
+            { BotLanguage.Persian, "🎁 مشاهده دمو رایگان" },
+            { BotLanguage.English, "🎁 View Free Demo" }
+        },
+        ["model.profile.subscribed"] = new()
+        {
+            { BotLanguage.Persian, "✅ شما مشترک هستید!" },
+            { BotLanguage.English, "✅ You are subscribed!" }
+        },
+        ["model.profile.view_my_content"] = new()
+        {
+            { BotLanguage.Persian, "📂 مشاهده محتوای من" },
+            { BotLanguage.English, "📂 View My Content" }
+        },
+        ["model.profile.subscribe_offer"] = new()
+        {
+            { BotLanguage.Persian, "💰 اشتراک {0} ستاره / {1} روز\nدسترسی به تمام محتوا!\n" },
+            { BotLanguage.English, "💰 Subscribe for {0} stars/{1} days\nGet access to all content!\n" }
+        },
+        ["model.profile.subscribe_button"] = new()
+        {
+            { BotLanguage.Persian, "💳 اشتراک ({0} ستاره)" },
+            { BotLanguage.English, "💳 Subscribe ({0} stars)" }
+        },
+        ["model.profile.available_photos"] = new()
+        {
+            { BotLanguage.Persian, "📸 عکس‌های موجود:" },
+            { BotLanguage.English, "📸 Available Photos:" }
+        },
+        ["model.profile.buy_button"] = new()
+        {
+            { BotLanguage.Persian, "🛒 خرید: {0}" },
+            { BotLanguage.English, "🛒 Buy: {0}" }
+        },
+        ["model.profile.back_to_models"] = new()
+        {
+            { BotLanguage.Persian, "⬅️ بازگشت به لیست مدل‌ها" },
+            { BotLanguage.English, "⬅️ Back to Models" }
         }
         #endregion
     };

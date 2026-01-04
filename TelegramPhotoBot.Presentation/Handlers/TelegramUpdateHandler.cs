@@ -2495,21 +2495,22 @@ public partial class TelegramUpdateHandler
 
             if (!subsList.Any())
             {
-                var noSubsMessage = "📭 You don't have any model subscriptions yet.\n\n" +
-                                   "Browse models and subscribe to your favorite creators!";
+                var noSubsMessage = await _localizationService.GetStringAsync("subscription.none", cancellationToken);
+                var browseText = await _localizationService.GetStringAsync("menu.browse_models", cancellationToken);
+                var backText = await _localizationService.GetStringAsync("menu.back", cancellationToken);
                 
                 var noSubsButtons = new List<List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>>
                 {
                     new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
                     {
                         Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
-                            "🔍 Browse Models",
+                            browseText,
                             "menu_browse_models")
                     },
                     new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
                     {
                         Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
-                            "« Back to Main Menu",
+                            backText,
                             "menu_back_main")
                     }
                 };
@@ -2519,7 +2520,8 @@ public partial class TelegramUpdateHandler
                 return;
             }
 
-            var message = $"📋 Your Model Subscriptions ({subsList.Count}):\n\n";
+            var titleText = await _localizationService.GetStringAsync("subscription.title", cancellationToken);
+            var message = titleText + $" ({subsList.Count}):\n\n";
 
             // Build buttons for each subscribed model
             var buttons = new List<List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>>();
@@ -2536,25 +2538,28 @@ public partial class TelegramUpdateHandler
 
                 var statusEmoji = sub.IsValidNow() ? "✅" : "⚠️";
                 message += $"{statusEmoji} {modelDisplayName}\n";
-                message += $"   Status: {(sub.IsActive ? "🟢 Active" : "🔴 Inactive")}\n";
-                message += $"   Period: {sub.SubscriptionPeriod.StartDate:d} - {sub.SubscriptionPeriod.EndDate:d}\n";
-                message += $"   Days remaining: {sub.GetRemainingDays()}\n";
-                message += $"   Auto-renew: {(sub.AutoRenew ? "✅ Yes" : "❌ No")}\n\n";
+                
+                var statusText = sub.IsActive 
+                    ? await _localizationService.GetStringAsync("subscription.active", sub.SubscriptionPeriod.EndDate.ToString("yyyy-MM-dd"))
+                    : await _localizationService.GetStringAsync("subscription.expired", sub.SubscriptionPeriod.EndDate.ToString("yyyy-MM-dd"));
+                message += $"   {statusText}\n\n";
 
                 // Add button to view model's content
+                var viewContentText = await _localizationService.GetStringAsync("subscription.view_content", modelDisplayName);
                 buttons.Add(new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
                 {
                     Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
-                        $"📸 View {modelDisplayName}'s Content",
+                        viewContentText,
                         $"view_model_content_{model.Id}")
                 });
             }
 
             // Add back button
+            var backText = await _localizationService.GetStringAsync("menu.back", cancellationToken);
             buttons.Add(new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
             {
                 Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
-                    "« Back to Main Menu",
+                    backText,
                     "menu_back_main")
             });
 

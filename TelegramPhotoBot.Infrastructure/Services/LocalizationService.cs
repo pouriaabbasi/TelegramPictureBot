@@ -1335,12 +1335,12 @@ Date: 2025-01-01" }
         },
         ["payment.star_coming_soon"] = new()
         {
-            { BotLanguage.Persian, "⭐️ پرداخت با Star Reaction به زودی!\n\n" +
-                "این روش پرداخت به شما اجازه می‌دهد با ارسال ری‌اکشن ستاره پرداخت کنید.\n\n" +
-                "فعلاً لطفاً از پرداخت Telegram Invoice استفاده کنید." },
+            { BotLanguage.Persian, "⭐️ پرداخت با ری‌اکشن ستاره به زودی فعال می‌شود!\n\n" +
+                "این روش پرداخت در حال توسعه است و به زودی قابل استفاده خواهد بود.\n\n" +
+                "فعلاً لطفاً از پرداخت با کارت بانکی استفاده کنید." },
             { BotLanguage.English, "⭐️ Star Reaction payment coming soon!\n\n" +
-                "This payment method will allow you to pay by sending star reactions.\n\n" +
-                "For now, please use Telegram Invoice payment." }
+                "This payment method is under development and will be available soon.\n\n" +
+                "For now, please use card payment." }
         },
         #endregion
     };

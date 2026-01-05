@@ -7,9 +7,9 @@
 
 ## 📊 Status Summary
 - **Total Tasks**: 13
-- **Pending**: 8
+- **Pending**: 6
 - **In Progress**: 0
-- **Completed**: 5
+- **Completed**: 7
 
 ---
 
@@ -64,7 +64,7 @@
 
 ### 3️⃣ **Top 10 Most Popular Content**
 **Priority**: Medium  
-**Status**: Pending  
+**Status**: ✅ Completed  
 **ID**: `top-content-analytics`
 
 **Description**:
@@ -73,30 +73,15 @@
 - Top 10 Yearly (این سال)
 - Top 10 All Time (کل تاریخ)
 
-**Technical Details**:
-- Create `IContentAnalyticsService`
-- Implement ranking by: Views, Purchases, Revenue
-- Add time-range filtering
-- Create new callback handlers in Model Dashboard
-- Cache results (optional, using `IMemoryCache`)
+**Implementation Details**:
+- ✅ Implemented in `RevenueAnalyticsService`
+- ✅ `HandleModelTopContentAsync` handler created
+- ✅ Ranking by purchases (sales)
+- ✅ Time-range filtering (Monthly, Yearly, All Time)
+- ✅ Integrated in Model Dashboard
+- ✅ Localized messages
 
-**Button Flow**:
-```
-Model Dashboard → [📊 Analytics] → 
-  - [📅 Top 10 This Month]
-  - [📆 Top 10 This Year]
-  - [🏆 Top 10 All Time]
-```
-
-**Queries Needed**:
-```csharp
-Task<List<ContentRankingDto>> GetTopContentAsync(
-    Guid modelId,
-    TimeRange range,
-    int topCount = 10,
-    RankingCriteria criteria = RankingCriteria.Purchases
-);
-```
+**Completed**: 2025-01-05
 
 ---
 
@@ -280,53 +265,28 @@ Wishlist:
 
 ### 8️⃣ **Model Revenue Dashboard**
 **Priority**: High  
-**Status**: Pending  
+**Status**: ✅ Completed  
 **ID**: `revenue-dashboard`
 
 **Description**:
-داشبورد کامل درآمد برای مدل‌ها:
-- نمودار درآمد (Graphs) - روزانه، ماهانه
-- آمار فروش (Sales Stats)
-- Conversion Rate
-- تعداد Subscribers
-- تسویه‌حساب‌های قبلی
-- مانده حساب فعلی
+داشبورد کامل درآمد برای مدل‌ها با نمایش آمار و metrics
 
-**Technical Details**:
-- Create `IRevenueAnalyticsService`
-- Generate charts (using external API or text-based)
-- Calculate metrics:
-  - Total Revenue
-  - Revenue This Month
-  - Revenue This Year
-  - Avg Revenue Per Purchase
-  - Subscriber Growth Rate
+**Implementation Details**:
+- ✅ Created `IRevenueAnalyticsService` and `RevenueAnalyticsService`
+- ✅ Implemented `HandleModelDashboardAsync` with comprehensive analytics
+- ✅ Metrics calculated:
+  - Total Revenue, This Month, Today
+  - Available Balance
+  - Total Subscribers, Total Sales
+  - Average Sale Price
+  - Conversion Rate
   - Content Performance
+  - Top Content (Monthly, Yearly, All Time)
+  - Payout History
+- ✅ Integrated with Model Dashboard UI
+- ✅ Localized all dashboard messages
 
-**Dashboard Layout**:
-```
-💰 Revenue Dashboard - [Model Name]
-
-📊 Overview:
-   Total Revenue: 50,000 Stars (4,250,000 تومان)
-   This Month: 8,500 Stars
-   Today: 320 Stars
-
-📈 Stats:
-   Total Subscribers: 245
-   Total Sales: 1,234
-   Avg Sale Value: 40.5 Stars
-   Conversion Rate: 12.3%
-
-💵 Payouts:
-   Last Payout: 2024-12-15 (42,500 Stars)
-   Pending Balance: 7,500 Stars
-   Next Payout: 2025-01-15
-
-[📊 Detailed Analytics]
-[💳 Payout History]
-[📥 Request Payout]
-```
+**Completed**: 2025-01-05
 
 ---
 
@@ -459,60 +419,23 @@ public enum ModerationAction
 
 ### 1️⃣1️⃣ **Terms & Conditions for Model Registration**
 **Priority**: High  
-**Status**: Pending  
+**Status**: ✅ Completed  
 **ID**: `model-terms-conditions`
 
 **Description**:
-قبل از ثبت‌نام به عنوان مدل، شرایط نمایش داده بشه:
-- 15% کارمزد پلتفرم (85% برای مدل)
-- تسویه ماهانه
-- قوانین محتوا
-- سیاست‌های Privacy و Copyright
-- مدل باید Accept کنه
+قبل از ثبت‌نام به عنوان مدل، شرایط نمایش داده بشه و مدل باید accept کنه.
 
-**Technical Details**:
-- Add Terms & Conditions text to database or config
-- Display before model registration
-- Add checkbox/button for acceptance
-- Store acceptance date in `Model` entity
-- Block registration if not accepted
+**Implementation Details**:
+- ✅ Created `ModelTermsAcceptance` entity
+- ✅ Created `IModelTermsService` and `ModelTermsService`
+- ✅ Implemented `ShowModelTermsAndConditionsAsync` in TelegramUpdateHandler
+- ✅ Implemented `HandleTermsAcceptanceAsync` for acceptance tracking
+- ✅ Stores acceptance date, terms version, and full terms content
+- ✅ Bilingual terms (Persian/English) via LocalizationService
+- ✅ Integrated with model registration flow
+- ✅ Database migration created
 
-**Database Changes**:
-```csharp
-// Add to Model entity:
-public DateTime? TermsAcceptedAt { get; private set; }
-
-public void AcceptTerms()
-{
-    TermsAcceptedAt = DateTime.UtcNow;
-    MarkAsUpdated();
-}
-```
-
-**UI Flow**:
-```
-User: /become_model
-
-Bot: 📋 شرایط و قوانین ثبت‌نام به عنوان مدل:
-
-1️⃣ کارمزد پلتفرم:
-   - 15% از درآمد شما به پلتفرم
-   - 85% برای شما
-   - مثال: برای هر 100 Stars، 85 Stars به شما میرسه
-
-2️⃣ تسویه‌حساب:
-   - تسویه به صورت ماهانه
-   - حداقل موجودی برای برداشت: 1,000 Stars
-   - روش پرداخت: انتقال بانکی / کارت به کارت
-
-3️⃣ قوانین محتوا:
-   - محتوای غیرقانونی ممنوع
-   - محتوای حق نشر دار دیگران ممنوع
-   - رعایت قوانین تلگرام الزامی
-
-[✅ قبول دارم و ثبت‌نام میکنم]
-[❌ انصراف]
-```
+**Completed**: 2025-01-04
 
 ---
 

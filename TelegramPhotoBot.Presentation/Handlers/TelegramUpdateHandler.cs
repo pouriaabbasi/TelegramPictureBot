@@ -4789,14 +4789,28 @@ public partial class TelegramUpdateHandler
     }
 
     /// <summary>
-    /// Builds a visual progress bar
+    /// Builds a visual progress bar (scaled to max 15 characters)
     /// </summary>
     private string BuildProgressBar(int current, int required)
     {
-        var filled = Math.Min(current, required);
-        var empty = required - filled;
+        const int maxBarLength = 15; // Maximum progress bar length
         
-        return new string('⭐', filled) + new string('⚪', empty);
+        if (required <= maxBarLength)
+        {
+            // Small amounts: show 1:1 ratio
+            var filled = Math.Min(current, required);
+            var empty = required - filled;
+            return new string('⭐', filled) + new string('⚪', empty);
+        }
+        else
+        {
+            // Large amounts: scale to maxBarLength
+            var percentage = (double)current / required;
+            var filledScaled = (int)Math.Round(percentage * maxBarLength);
+            var emptyScaled = maxBarLength - filledScaled;
+            
+            return new string('⭐', filledScaled) + new string('⚪', emptyScaled);
+        }
     }
 
     /// <summary>

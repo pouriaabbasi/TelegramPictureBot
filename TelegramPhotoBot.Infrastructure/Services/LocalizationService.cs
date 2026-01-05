@@ -1188,6 +1188,74 @@ Date: 2025-01-01" }
         {
             { BotLanguage.Persian, "⬅️ بازگشت به لیست مدل‌ها" },
             { BotLanguage.English, "⬅️ Back to Models" }
+        },
+        #endregion
+        
+        #region Content Statistics
+        ["content_stats.title"] = new()
+        {
+            { BotLanguage.Persian, "📊 آمار محتوا\n\n" },
+            { BotLanguage.English, "📊 Content Statistics\n\n" }
+        },
+        ["content_stats.no_content"] = new()
+        {
+            { BotLanguage.Persian, "📊 هنوز آماری موجود نیست.\n\nبرای مشاهده آمار دقیق، محتوا آپلود کنید!" },
+            { BotLanguage.English, "📊 No content statistics available yet.\n\nUpload some content to see detailed statistics!" }
+        },
+        ["content_stats.views"] = new()
+        {
+            { BotLanguage.Persian, "   👁️ بازدید: {0}" },
+            { BotLanguage.English, "   👁️ Views: {0}" }
+        },
+        ["content_stats.purchases"] = new()
+        {
+            { BotLanguage.Persian, "   🛒 خرید: {0}" },
+            { BotLanguage.English, "   🛒 Purchases: {0}" }
+        },
+        ["content_stats.revenue"] = new()
+        {
+            { BotLanguage.Persian, "   💰 درآمد: {0:N0} ⭐️" },
+            { BotLanguage.English, "   💰 Revenue: {0:N0} ⭐️" }
+        },
+        ["content_stats.conversion"] = new()
+        {
+            { BotLanguage.Persian, "   📈 نرخ تبدیل: {0:F2}%" },
+            { BotLanguage.English, "   📈 Conversion: {0:F2}%" }
+        },
+        ["content_stats.more_items"] = new()
+        {
+            { BotLanguage.Persian, "_... و {0} مورد دیگر_\n" },
+            { BotLanguage.English, "_... and {0} more items_\n" }
+        },
+        ["content_stats.not_model"] = new()
+        {
+            { BotLanguage.Persian, "❌ شما به عنوان مدل ثبت‌نام نکرده‌اید." },
+            { BotLanguage.English, "❌ You are not registered as a model." }
+        },
+        ["top_content.title"] = new()
+        {
+            { BotLanguage.Persian, "🏆 محتوای برتر\n\n" },
+            { BotLanguage.English, "🏆 Top Performing Content\n\n" }
+        },
+        ["top_content.all_time"] = new()
+        {
+            { BotLanguage.Persian, "🌟 برترین‌های همیشه:" },
+            { BotLanguage.English, "🌟 All Time Top 10:" }
+        },
+        ["top_content.this_year"] = new()
+        {
+            { BotLanguage.Persian, "📆 برترین‌های امسال:" },
+            { BotLanguage.English, "📆 This Year Top 10:" }
+        },
+        ["top_content.this_month"] = new()
+        {
+            { BotLanguage.Persian, "📅 برترین‌های این ماه:" },
+            { BotLanguage.English, "📅 This Month Top 10:" }
+        },
+        ["top_content.no_data"] = new()
+        {
+            { BotLanguage.Persian, "📊 هنوز داده‌ای موجود نیست.\n\nبعد از فروش محتوا، آمار برترین‌ها اینجا نمایش داده می‌شود!" },
+            { BotLanguage.English, "📊 No data available yet.\n\nOnce you start selling content, top performers will appear here!" }
         }
         #endregion
     };

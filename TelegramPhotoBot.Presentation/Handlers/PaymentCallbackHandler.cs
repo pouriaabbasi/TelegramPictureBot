@@ -215,6 +215,10 @@ public class PaymentCallbackHandler
 
                     if (deliveryResult.IsSuccess)
                     {
+                        // Track the view after successful purchase delivery
+                        photo.IncrementViewCount();
+                        await _photoRepository.UpdateAsync(photo, cancellationToken);
+                        
                         await _telegramBotService.SendMessageAsync(
                             chatId,
                             "✅ Payment completed! Your photo has been sent.",

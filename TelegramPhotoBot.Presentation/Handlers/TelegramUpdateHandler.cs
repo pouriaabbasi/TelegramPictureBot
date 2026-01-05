@@ -1189,7 +1189,23 @@ public partial class TelegramUpdateHandler
             }
             else
             {
-                Console.WriteLine($"✅ Photo sent successfully to chat {chatId} with self-destruct timer");
+                // Track the view: increment view count
+                photo.IncrementViewCount();
+                await _photoRepository.UpdateAsync(photo, cancellationToken);
+                
+                // Log view history for premium content
+                await _viewHistoryRepository.LogViewAsync(
+                    userId: userId,
+                    photoId: photo.Id,
+                    modelId: photo.ModelId,
+                    photoType: photo.Type,
+                    viewerUsername: user.Username,
+                    photoCaption: photo.Caption,
+                    cancellationToken: cancellationToken);
+                
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+                
+                Console.WriteLine($"✅ Photo sent successfully to chat {chatId} with self-destruct timer. ViewCount: {photo.ViewCount}");
                 await _telegramBotService.SendMessageAsync(
                     chatId,
                     "✅ عکس با موفقیت ارسال شد! این عکس پس از مشاهده خودکار حذف می‌شود.",
@@ -4245,7 +4261,8 @@ public partial class TelegramUpdateHandler
             var model = await _modelService.GetModelByUserIdAsync(userId, cancellationToken);
             if (model == null)
             {
-                await _telegramBotService.SendMessageAsync(chatId, "❌ You are not registered as a model.", cancellationToken);
+                var notModelMsg = await _localizationService.GetStringAsync("content_stats.not_model", cancellationToken);
+                await _telegramBotService.SendMessageAsync(chatId, notModelMsg, cancellationToken);
                 return;
             }
 
@@ -4253,35 +4270,43 @@ public partial class TelegramUpdateHandler
 
             if (!analytics.ContentStatistics.Any())
             {
-                await _telegramBotService.SendMessageAsync(
-                    chatId,
-                    "📊 No content statistics available yet.\n\nUpload some content to see detailed statistics!",
-                    cancellationToken);
+                var noContentMsg = await _localizationService.GetStringAsync("content_stats.no_content", cancellationToken);
+                await _telegramBotService.SendMessageAsync(chatId, noContentMsg, cancellationToken);
                 return;
             }
 
-            var message = "📊 **Content Statistics**\n\n";
+            var message = await _localizationService.GetStringAsync("content_stats.title", cancellationToken);
 
             foreach (var content in analytics.ContentStatistics.OrderByDescending(c => c.RevenueStars).Take(20))
             {
                 message += $"📸 **{content.ContentName}**\n";
-                message += $"   👁️ Views: {content.Views}\n";
-                message += $"   🛒 Purchases: {content.Purchases}\n";
-                message += $"   💰 Revenue: {content.RevenueStars:N0} ⭐️\n";
-                message += $"   📈 Conversion: {content.ConversionRate:F2}%\n\n";
+                
+                var viewsText = await _localizationService.GetStringAsync("content_stats.views", content.Views.ToString());
+                message += $"{viewsText}\n";
+                
+                var purchasesText = await _localizationService.GetStringAsync("content_stats.purchases", content.Purchases.ToString());
+                message += $"{purchasesText}\n";
+                
+                var revenueText = await _localizationService.GetStringAsync("content_stats.revenue", content.RevenueStars.ToString("N0"));
+                message += $"{revenueText}\n";
+                
+                var conversionText = await _localizationService.GetStringAsync("content_stats.conversion", content.ConversionRate.ToString("F2"));
+                message += $"{conversionText}\n\n";
             }
 
             if (analytics.ContentStatistics.Count > 20)
             {
-                message += $"_... and {analytics.ContentStatistics.Count - 20} more items_\n";
+                var moreItemsText = await _localizationService.GetStringAsync("content_stats.more_items", (analytics.ContentStatistics.Count - 20).ToString());
+                message += moreItemsText;
             }
 
+            var backText = await _localizationService.GetStringAsync("menu.back", cancellationToken);
             var buttons = new List<List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>>
             {
                 new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
                 {
                     Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
-                        "<< Back to Dashboard",
+                        backText,
                         "menu_model_dashboard")
                 }
             };
@@ -4291,7 +4316,8 @@ public partial class TelegramUpdateHandler
         }
         catch (Exception ex)
         {
-            await _telegramBotService.SendMessageAsync(chatId, $"❌ Error loading content statistics: {ex.Message}", cancellationToken);
+            var errorMsg = await _localizationService.GetStringAsync("error.generic", ex.Message);
+            await _telegramBotService.SendMessageAsync(chatId, errorMsg, cancellationToken);
         }
     }
 
@@ -4305,18 +4331,20 @@ public partial class TelegramUpdateHandler
             var model = await _modelService.GetModelByUserIdAsync(userId, cancellationToken);
             if (model == null)
             {
-                await _telegramBotService.SendMessageAsync(chatId, "❌ You are not registered as a model.", cancellationToken);
+                var notModelMsg = await _localizationService.GetStringAsync("content_stats.not_model", cancellationToken);
+                await _telegramBotService.SendMessageAsync(chatId, notModelMsg, cancellationToken);
                 return;
             }
 
             var analytics = await _revenueAnalyticsService.GetModelRevenueAnalyticsAsync(model.Id, cancellationToken);
 
-            var message = "🏆 **Top Performing Content**\n\n";
+            var message = await _localizationService.GetStringAsync("top_content.title", cancellationToken);
 
             // Top Overall
             if (analytics.TopOverallContent.Any())
             {
-                message += "🌟 **All Time Top 10:**\n";
+                var allTimeText = await _localizationService.GetStringAsync("top_content.all_time", cancellationToken);
+                message += $"{allTimeText}\n";
                 var rank = 1;
                 foreach (var item in analytics.TopOverallContent.Take(10))
                 {
@@ -4329,7 +4357,8 @@ public partial class TelegramUpdateHandler
             // Top Monthly
             if (analytics.TopMonthlyContent.Any())
             {
-                message += "📅 **This Month Top 10:**\n";
+                var thisMonthText = await _localizationService.GetStringAsync("top_content.this_month", cancellationToken);
+                message += $"{thisMonthText}\n";
                 var rank = 1;
                 foreach (var item in analytics.TopMonthlyContent.Take(10))
                 {
@@ -4342,7 +4371,8 @@ public partial class TelegramUpdateHandler
             // Top Yearly
             if (analytics.TopYearlyContent.Any())
             {
-                message += "📆 **This Year Top 10:**\n";
+                var thisYearText = await _localizationService.GetStringAsync("top_content.this_year", cancellationToken);
+                message += $"{thisYearText}\n";
                 var rank = 1;
                 foreach (var item in analytics.TopYearlyContent.Take(10))
                 {
@@ -4353,15 +4383,16 @@ public partial class TelegramUpdateHandler
 
             if (!analytics.TopOverallContent.Any() && !analytics.TopMonthlyContent.Any() && !analytics.TopYearlyContent.Any())
             {
-                message = "🏆 No top content available yet.\n\nUpload and sell content to see your top performers!";
+                message = await _localizationService.GetStringAsync("top_content.no_data", cancellationToken);
             }
 
+            var backText = await _localizationService.GetStringAsync("menu.back", cancellationToken);
             var buttons = new List<List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>>
             {
                 new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
                 {
                     Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
-                        "<< Back to Dashboard",
+                        backText,
                         "menu_model_dashboard")
                 }
             };
@@ -4371,7 +4402,8 @@ public partial class TelegramUpdateHandler
         }
         catch (Exception ex)
         {
-            await _telegramBotService.SendMessageAsync(chatId, $"❌ Error loading top content: {ex.Message}", cancellationToken);
+            var errorMsg = await _localizationService.GetStringAsync("error.generic", ex.Message);
+            await _telegramBotService.SendMessageAsync(chatId, errorMsg, cancellationToken);
         }
     }
 

@@ -1342,6 +1342,31 @@ Date: 2025-01-01" }
                 "This payment method is under development and will be available soon.\n\n" +
                 "For now, please use card payment." }
         },
+        ["payment.star_instructions"] = new()
+        {
+            { BotLanguage.Persian, "🌟 پرداخت با ری‌اکشن ستاره\n\n" +
+                "لطفاً روی این پیام {0} ⭐️ reaction بزنید\n\n" +
+                "پیشرفت:\n{1}\n\n" +
+                "پس از تکمیل، محتوا به صورت خودکار برای شما ارسال می‌شود." },
+            { BotLanguage.English, "🌟 Star Reaction Payment\n\n" +
+                "Please react with {0} ⭐️ to this message\n\n" +
+                "Progress:\n{1}\n\n" +
+                "Once complete, content will be automatically delivered." }
+        },
+        ["payment.star_progress"] = new()
+        {
+            { BotLanguage.Persian, "🌟 پرداخت با ری‌اکشن ستاره\n\n" +
+                "پیشرفت:\n{0}\n\n" +
+                "دریافت شده: {1} از {2} ⭐️" },
+            { BotLanguage.English, "🌟 Star Reaction Payment\n\n" +
+                "Progress:\n{0}\n\n" +
+                "Received: {1} of {2} ⭐️" }
+        },
+        ["payment.star_completed"] = new()
+        {
+            { BotLanguage.Persian, "✅ پرداخت با ستاره تکمیل شد!" },
+            { BotLanguage.English, "✅ Star payment completed!" }
+        },
         #endregion
     };
     

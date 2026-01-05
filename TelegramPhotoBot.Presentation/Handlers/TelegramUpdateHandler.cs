@@ -4,6 +4,8 @@ using TelegramPhotoBot.Application.Interfaces;
 using TelegramPhotoBot.Application.Interfaces.Repositories;
 using TelegramPhotoBot.Application.Services;
 using TelegramPhotoBot.Domain.Entities;
+using TelegramPhotoBot.Domain.Enums;
+using TelegramPhotoBot.Domain.ValueObjects;
 using TelegramPhotoBot.Presentation.DTOs;
 
 namespace TelegramPhotoBot.Presentation.Handlers;
@@ -1094,24 +1096,43 @@ public partial class TelegramUpdateHandler
     }
 
     /// <summary>
-    /// Handles photo star reaction payment (placeholder for future implementation)
+    /// Handles photo star reaction payment
     /// </summary>
     private async Task HandlePhotoStarPaymentAsync(Guid userId, Guid photoId, long chatId, CancellationToken cancellationToken)
     {
         try
         {
-            // Note: Star Reaction payment requires Telegram.Bot v21.0.0+
-            // For now, show a message explaining this payment method is coming soon
-            var message = await _localizationService.GetStringAsync("payment.star_coming_soon", cancellationToken);
-            
-            if (string.IsNullOrEmpty(message) || message.StartsWith("payment.star_coming_soon"))
+            var photo = await _photoRepository.GetByIdAsync(photoId, cancellationToken);
+            if (photo == null || !photo.IsForSale)
             {
-                message = "⭐️ Star Reaction payment is coming soon!\n\n" +
-                         "This payment method will allow you to pay by sending star reactions.\n\n" +
-                         "For now, please use Telegram Invoice payment.";
+                var notFoundMsg = await _localizationService.GetStringAsync("content.not_found", cancellationToken);
+                await _telegramBotService.SendMessageAsync(chatId, notFoundMsg, cancellationToken);
+                return;
             }
 
-            await _telegramBotService.SendMessageAsync(chatId, message, cancellationToken);
+            var requiredStars = photo.Price.Amount;
+            
+            // Send payment instructions message
+            var instructionsText = await _localizationService.GetStringAsync("payment.star_instructions", cancellationToken);
+            var progressBar = BuildProgressBar(0, (int)requiredStars);
+            var message = string.Format(instructionsText, requiredStars, progressBar);
+            
+            var sentMessage = await _telegramBotService.SendMessageWithReturnAsync(chatId, message, cancellationToken);
+            
+            // Create pending payment record
+            var pendingPayment = new PendingStarPayment(
+                userId,
+                chatId,
+                photoId,
+                Domain.Enums.ContentType.Photo,
+                (int)requiredStars,
+                (long)sentMessage.MessageId,
+                chatId,
+                DateTime.UtcNow.AddHours(24) // 24 hour expiration
+            );
+            
+            await _pendingStarPaymentRepository.AddAsync(pendingPayment, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
         }
         catch (Exception ex)
         {
@@ -3293,24 +3314,42 @@ public partial class TelegramUpdateHandler
     }
 
     /// <summary>
-    /// Handles subscription star reaction payment (placeholder for future implementation)
+    /// Handles subscription star reaction payment
     /// </summary>
     private async Task HandleSubscriptionStarPaymentAsync(Guid userId, Guid modelId, long chatId, CancellationToken cancellationToken)
     {
         try
         {
-            // Note: Star Reaction payment requires Telegram.Bot v21.0.0+
-            // For now, show a message explaining this payment method is coming soon
-            var message = await _localizationService.GetStringAsync("payment.star_coming_soon", cancellationToken);
-            
-            if (string.IsNullOrEmpty(message) || message.StartsWith("payment.star_coming_soon"))
+            var model = await _modelService.GetModelByIdAsync(modelId, cancellationToken);
+            if (model == null || !model.CanAcceptSubscriptions())
             {
-                message = "⭐️ Star Reaction payment is coming soon!\n\n" +
-                         "This payment method will allow you to pay by sending star reactions.\n\n" +
-                         "For now, please use Telegram Invoice payment.";
+                await _telegramBotService.SendMessageAsync(chatId, "❌ Model not available for subscriptions.", cancellationToken);
+                return;
             }
 
-            await _telegramBotService.SendMessageAsync(chatId, message, cancellationToken);
+            var requiredStars = model.SubscriptionPrice?.Amount ?? 0;
+            
+            // Send payment instructions message
+            var instructionsText = await _localizationService.GetStringAsync("payment.star_instructions", cancellationToken);
+            var progressBar = BuildProgressBar(0, (int)requiredStars);
+            var message = string.Format(instructionsText, requiredStars, progressBar);
+            
+            var sentMessage = await _telegramBotService.SendMessageWithReturnAsync(chatId, message, cancellationToken);
+            
+            // Create pending payment record
+            var pendingPayment = new PendingStarPayment(
+                userId,
+                chatId,
+                modelId,
+                Domain.Enums.ContentType.Subscription,
+                (int)requiredStars,
+                (long)sentMessage.MessageId,
+                chatId,
+                DateTime.UtcNow.AddHours(24) // 24 hour expiration
+            );
+            
+            await _pendingStarPaymentRepository.AddAsync(pendingPayment, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
         }
         catch (Exception ex)
         {
@@ -4664,6 +4703,205 @@ public partial class TelegramUpdateHandler
         {
             var errorMsg = await _localizationService.GetStringAsync("error.generic", ex.Message);
             await _telegramBotService.SendMessageAsync(chatId, errorMsg, cancellationToken);
+        }
+    }
+
+    #endregion
+
+    #region Star Payment Methods
+
+    /// <summary>
+    /// Handles message reaction updates for star payments
+    /// </summary>
+    public async Task HandleMessageReactionAsync(MessageReactionUpdated reactionUpdate, CancellationToken cancellationToken)
+    {
+        try
+        {
+            // Check if this is a user reaction (not from a chat/channel)
+            if (reactionUpdate.User == null)
+                return;
+
+            var userId = reactionUpdate.User.Id;
+            var messageId = reactionUpdate.MessageId;
+            var chatId = reactionUpdate.Chat.Id;
+
+            // Find pending payment for this message
+            var allPayments = await _pendingStarPaymentRepository.GetAllAsync(cancellationToken);
+            var pendingPayment = allPayments.FirstOrDefault(p => 
+                p.PaymentMessageId == messageId && 
+                p.ChatId == chatId &&
+                p.Status == PaymentStatus.Pending);
+
+            if (pendingPayment == null)
+                return; // Not a payment message
+
+            // Count star reactions
+            int starCount = 0;
+            foreach (var reaction in reactionUpdate.NewReaction)
+            {
+                if (reaction is ReactionTypeEmoji emojiReaction && emojiReaction.Emoji == "⭐")
+                {
+                    starCount++;
+                }
+            }
+
+            // Update payment with current star count
+            pendingPayment.AddStars(starCount - pendingPayment.ReceivedStars);
+            await _pendingStarPaymentRepository.UpdateAsync(pendingPayment, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            // Update progress bar
+            await UpdatePaymentProgressAsync(pendingPayment, cancellationToken);
+
+            // Check if payment is complete
+            if (pendingPayment.IsComplete())
+            {
+                await CompleteStarPaymentAsync(pendingPayment, cancellationToken);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error handling message reaction: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Updates the progress bar for a pending payment
+    /// </summary>
+    private async Task UpdatePaymentProgressAsync(PendingStarPayment payment, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var progressBar = BuildProgressBar(payment.ReceivedStars, payment.RequiredStars);
+            var message = await _localizationService.GetStringAsync("payment.star_progress", cancellationToken);
+            message = string.Format(message, progressBar, payment.ReceivedStars, payment.RequiredStars);
+
+            await _telegramBotService.EditMessageAsync(
+                payment.ChatId,
+                (int)payment.PaymentMessageId,
+                message,
+                cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error updating payment progress: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Builds a visual progress bar
+    /// </summary>
+    private string BuildProgressBar(int current, int required)
+    {
+        var filled = Math.Min(current, required);
+        var empty = required - filled;
+        
+        return new string('⭐', filled) + new string('⚪', empty);
+    }
+
+    /// <summary>
+    /// Completes a star payment and delivers content
+    /// </summary>
+    private async Task CompleteStarPaymentAsync(PendingStarPayment payment, CancellationToken cancellationToken)
+    {
+        try
+        {
+            // Delete payment message
+            await _telegramBotService.DeleteMessageAsync(payment.ChatId, (int)payment.PaymentMessageId, cancellationToken);
+
+            // Mark as completed
+            payment.MarkAsCompleted();
+            await _pendingStarPaymentRepository.UpdateAsync(payment, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            // Deliver content based on type
+            if (payment.ContentType == Domain.Enums.ContentType.Photo)
+            {
+                await DeliverPhotoForStarPaymentAsync(payment, cancellationToken);
+            }
+            else if (payment.ContentType == Domain.Enums.ContentType.Subscription)
+            {
+                await DeliverSubscriptionForStarPaymentAsync(payment, cancellationToken);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error completing star payment: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Delivers photo content after star payment completion
+    /// </summary>
+    private async Task DeliverPhotoForStarPaymentAsync(PendingStarPayment payment, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var photo = await _photoRepository.GetByIdAsync(payment.ContentId, cancellationToken);
+            if (photo == null)
+                return;
+
+            // Create purchase record
+            var purchaseResult = await _photoPurchaseService.CreatePhotoPurchaseAsync(new Application.DTOs.CreatePhotoPurchaseRequest
+            {
+                UserId = payment.UserId,
+                PhotoId = photo.Id
+            }, cancellationToken);
+
+            // Deliver content
+            await _contentDeliveryService.SendPhotoAsync(new Application.DTOs.SendPhotoRequest
+            {
+                RecipientTelegramUserId = payment.TelegramUserId,
+                PhotoId = photo.Id
+            }, cancellationToken);
+
+            // Increment view count
+            photo.IncrementViewCount();
+            await _photoRepository.UpdateAsync(photo, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            // Send confirmation
+            var confirmMsg = await _localizationService.GetStringAsync("payment.star_completed", cancellationToken);
+            await _telegramBotService.SendMessageAsync(payment.ChatId, confirmMsg, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error delivering photo for star payment: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Delivers subscription after star payment completion
+    /// </summary>
+    private async Task DeliverSubscriptionForStarPaymentAsync(PendingStarPayment payment, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var model = await _modelService.GetModelByIdAsync(payment.ContentId, cancellationToken);
+            if (model == null)
+                return;
+
+            // Create subscription
+            var subscription = await _modelSubscriptionService.CreateSubscriptionAsync(
+                payment.UserId,
+                model.Id,
+                new TelegramStars(payment.RequiredStars),
+                cancellationToken);
+
+            var displayText = !string.IsNullOrWhiteSpace(model.Alias) 
+                ? model.Alias 
+                : model.DisplayName;
+
+            var confirmMsg = await _localizationService.GetStringAsync("payment.star_completed", cancellationToken);
+            confirmMsg += $"\n\n✅ Successfully subscribed to {displayText}!\n" +
+                         $"Duration: {model.SubscriptionDurationDays} days\n" +
+                         $"You now have access to all of {displayText}'s premium content!";
+
+            await _telegramBotService.SendMessageAsync(payment.ChatId, confirmMsg, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error delivering subscription for star payment: {ex.Message}");
         }
     }
 

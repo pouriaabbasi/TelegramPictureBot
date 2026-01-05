@@ -39,6 +39,20 @@ public class TelegramBotService : ITelegramBotService
         }
     }
 
+    public async Task<SentMessageInfo> SendMessageWithReturnAsync(long chatId, string message, CancellationToken cancellationToken = default)
+    {
+        var sentMessage = await _botClient.SendTextMessageAsync(
+            chatId: chatId,
+            text: message,
+            cancellationToken: cancellationToken);
+        
+        return new SentMessageInfo
+        {
+            MessageId = sentMessage.MessageId,
+            ChatId = chatId
+        };
+    }
+
     public async Task<bool> SendMessageWithButtonsAsync(long chatId, string message, object keyboard, CancellationToken cancellationToken = default)
     {
         try
@@ -55,6 +69,11 @@ public class TelegramBotService : ITelegramBotService
             Console.WriteLine($"Error sending message with buttons: {ex.Message}");
             return false;
         }
+    }
+
+    public async Task<bool> EditMessageAsync(long chatId, int messageId, string newText, CancellationToken cancellationToken = default)
+    {
+        return await EditMessageTextAsync(chatId, messageId, newText, cancellationToken);
     }
 
     public async Task<bool> EditMessageTextAsync(long chatId, int messageId, string newText, CancellationToken cancellationToken = default)
@@ -90,6 +109,23 @@ public class TelegramBotService : ITelegramBotService
         catch (Exception ex)
         {
             Console.WriteLine($"Error editing message and removing keyboard: {ex.Message}");
+            return false;
+        }
+    }
+
+    public async Task<bool> DeleteMessageAsync(long chatId, int messageId, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await _botClient.DeleteMessage(
+                chatId: chatId,
+                messageId: messageId,
+                cancellationToken: cancellationToken);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error deleting message: {ex.Message}");
             return false;
         }
     }

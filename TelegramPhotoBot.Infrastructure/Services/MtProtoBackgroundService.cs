@@ -492,7 +492,7 @@ public sealed class MtProtoBackgroundService : IMtProtoService, IDisposable
                 try
                 {
                     // دانلود فایل از Bot API
-                    var file = await _botClient.GetFileAsync(filePath, cancellationToken);
+                    var file = await _botClient.GetFile(filePath, cancellationToken);
                     
                     if (file.FilePath == null)
                     {
@@ -503,7 +503,7 @@ public sealed class MtProtoBackgroundService : IMtProtoService, IDisposable
                     // دانلود به فایل موقت
                     using (var fileStream = File.Create(tempFilePath))
                     {
-                        await _botClient.DownloadFileAsync(file.FilePath, fileStream, cancellationToken);
+                        await _botClient.DownloadFile(file.FilePath, fileStream, cancellationToken);
                     }
                     
                     Console.WriteLine($"✅ Downloaded to temp file: {tempFilePath}");

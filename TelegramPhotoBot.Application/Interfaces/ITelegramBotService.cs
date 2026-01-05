@@ -2,6 +2,12 @@ using TelegramPhotoBot.Application.DTOs;
 
 namespace TelegramPhotoBot.Application.Interfaces;
 
+public class SentMessageInfo
+{
+    public int MessageId { get; set; }
+    public long ChatId { get; set; }
+}
+
 /// <summary>
 /// Service for interacting with Telegram Bot API
 /// </summary>
@@ -13,9 +19,19 @@ public interface ITelegramBotService
     Task<bool> SendMessageAsync(long chatId, string message, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Sends a message and returns the sent message info
+    /// </summary>
+    Task<SentMessageInfo> SendMessageWithReturnAsync(long chatId, string message, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Sends a message with inline keyboard buttons
     /// </summary>
     Task<bool> SendMessageWithButtonsAsync(long chatId, string message, object keyboard, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Edits an existing message text
+    /// </summary>
+    Task<bool> EditMessageAsync(long chatId, int messageId, string newText, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Edits an existing message text
@@ -26,6 +42,11 @@ public interface ITelegramBotService
     /// Edits an existing message text and removes inline keyboard
     /// </summary>
     Task<bool> EditMessageTextAndRemoveKeyboardAsync(long chatId, int messageId, string newText, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Deletes a message
+    /// </summary>
+    Task<bool> DeleteMessageAsync(long chatId, int messageId, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Sends a contact card to a user

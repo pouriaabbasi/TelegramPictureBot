@@ -35,12 +35,18 @@ public class TelegramBotPollingService : BackgroundService
 
         var receiverOptions = new ReceiverOptions
         {
-            AllowedUpdates = Array.Empty<UpdateType>() // Receive all update types
+            AllowedUpdates = new[] 
+            { 
+                UpdateType.Message, 
+                UpdateType.CallbackQuery, 
+                UpdateType.PreCheckoutQuery,
+                UpdateType.MessageReaction  // Enable reaction updates
+            }
         };
 
         _botClient.StartReceiving(
             updateHandler: HandleUpdateAsync,
-            pollingErrorHandler: HandlePollingErrorAsync,
+            errorHandler: HandlePollingErrorAsync,
             receiverOptions: receiverOptions,
             cancellationToken: stoppingToken
         );
@@ -150,6 +156,26 @@ public class TelegramBotPollingService : BackgroundService
                                 update.PreCheckoutQuery.Currency,
                                 cancellationToken);
                         }
+                        break;
+
+                    case UpdateType.MessageReaction:
+                        if (update.MessageReaction != null)
+                        {
+                            _logger.LogDebug("Processing message reaction from user {UserId}, chat {ChatId}, message {MessageId}", 
+                                update.MessageReaction.User?.Id ?? update.MessageReaction.ActorChat?.Id ?? 0,
+                                update.MessageReaction.Chat.Id,
+                                update.MessageReaction.MessageId);
+                            
+                            await updateHandler.HandleMessageReactionAsync(update.MessageReaction, cancellationToken);
+                        }
+                        else
+                        {
+                            _logger.LogWarning("Update type is MessageReaction but MessageReaction is null");
+                        }
+                        break;
+
+                    default:
+                        _logger.LogWarning("Unhandled update type: {UpdateType}", update.Type);
                         break;
 
                     // Note: MessageReaction support requires Telegram.Bot v21.0.0 or higher

@@ -520,6 +520,39 @@ public partial class TelegramUpdateHandler
                         cancellationToken);
                 }
                 break;
+                
+            case "pay":
+                // Handle payment method selection for subscriptions and photos
+                if (parts.Length >= 4)
+                {
+                    var paymentMethod = secondPart; // "invoice" or "star"
+                    var paymentType = parts[2]; // "sub" for subscription, "photo" for photo
+                    var idStr = parts[3];
+                    
+                    if (paymentType == "sub" && Guid.TryParse(idStr, out var modelId))
+                    {
+                        if (paymentMethod == "invoice")
+                        {
+                            await HandleSubscriptionInvoicePaymentAsync(user.Id, modelId, chatId, cancellationToken);
+                        }
+                        else if (paymentMethod == "star")
+                        {
+                            await HandleSubscriptionStarPaymentAsync(user.Id, modelId, chatId, cancellationToken);
+                        }
+                    }
+                    else if (paymentType == "photo" && Guid.TryParse(idStr, out var photoId))
+                    {
+                        if (paymentMethod == "invoice")
+                        {
+                            await HandlePhotoInvoicePaymentAsync(user.Id, photoId, chatId, cancellationToken);
+                        }
+                        else if (paymentMethod == "star")
+                        {
+                            await HandlePhotoStarPaymentAsync(user.Id, photoId, chatId, cancellationToken);
+                        }
+                    }
+                }
+                break;
 
             case "test":
                 if (secondPart == "sub")
@@ -939,6 +972,9 @@ public partial class TelegramUpdateHandler
         }
     }
 
+    /// <summary>
+    /// Shows payment method selection for photo purchase
+    /// </summary>
     private async Task HandleBuyPhotoCommandAsync(Guid userId, string photoIdStr, long chatId, CancellationToken cancellationToken)
     {
         try
@@ -953,6 +989,64 @@ public partial class TelegramUpdateHandler
                 return;
             }
 
+            // Get the photo
+            var photo = await _photoRepository.GetByIdAsync(photoId, cancellationToken);
+            if (photo == null || !photo.IsForSale)
+            {
+                var notFoundMsg = await _localizationService.GetStringAsync("content.not_found", cancellationToken);
+                await _telegramBotService.SendMessageAsync(
+                    chatId,
+                    notFoundMsg,
+                    cancellationToken);
+                return;
+            }
+
+            // Build payment method selection message
+            var selectMethodMsg = await _localizationService.GetStringAsync("payment.select_method", cancellationToken);
+            var contentInfo = await _localizationService.GetStringAsync("payment.content_info", cancellationToken);
+            
+            var message = selectMethodMsg;
+            message += string.Format(contentInfo, photo.Caption ?? "Premium Photo", photo.Price.Amount);
+
+            // Build keyboard with payment options
+            var invoiceMethodText = await _localizationService.GetStringAsync("payment.method_invoice", cancellationToken);
+            var starMethodText = await _localizationService.GetStringAsync("payment.method_star", cancellationToken);
+
+            var keyboard = new Telegram.Bot.Types.ReplyMarkups.InlineKeyboardMarkup(new[]
+            {
+                new[]
+                {
+                    Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
+                        invoiceMethodText,
+                        $"pay_invoice_photo_{photoId}"),
+                },
+                new[]
+                {
+                    Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
+                        starMethodText,
+                        $"pay_star_photo_{photoId}")
+                }
+            });
+
+            await _telegramBotService.SendMessageWithButtonsAsync(chatId, message, keyboard, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            var errorMsg = await _localizationService.GetStringAsync("error.generic", ex.Message);
+            await _telegramBotService.SendMessageAsync(
+                chatId,
+                errorMsg,
+                cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// Handles photo invoice payment
+    /// </summary>
+    private async Task HandlePhotoInvoicePaymentAsync(Guid userId, Guid photoId, long chatId, CancellationToken cancellationToken)
+    {
+        try
+        {
             // Get the photo
             var photo = await _photoRepository.GetByIdAsync(photoId, cancellationToken);
             if (photo == null || !photo.IsForSale)
@@ -983,20 +1077,10 @@ public partial class TelegramUpdateHandler
 
             var invoiceId = await _telegramBotService.CreateInvoiceAsync(invoiceRequest, cancellationToken);
 
-            if (invoiceId != null)
-            {
-                await _telegramBotService.SendMessageAsync(
-                    chatId,
-                    " Invoice created! Please complete the payment.",
-                    cancellationToken);
-            }
-            else
+            if (invoiceId == null)
             {
                 var invoiceFailedMsg = await _localizationService.GetStringAsync("purchase.invoice_failed", cancellationToken);
-                await _telegramBotService.SendMessageAsync(
-                    chatId,
-                    invoiceFailedMsg,
-                    cancellationToken);
+                await _telegramBotService.SendMessageAsync(chatId, invoiceFailedMsg, cancellationToken);
             }
         }
         catch (Exception ex)
@@ -1006,6 +1090,33 @@ public partial class TelegramUpdateHandler
                 chatId,
                 errorMsg,
                 cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// Handles photo star reaction payment (placeholder for future implementation)
+    /// </summary>
+    private async Task HandlePhotoStarPaymentAsync(Guid userId, Guid photoId, long chatId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            // Note: Star Reaction payment requires Telegram.Bot v21.0.0+
+            // For now, show a message explaining this payment method is coming soon
+            var message = await _localizationService.GetStringAsync("payment.star_coming_soon", cancellationToken);
+            
+            if (string.IsNullOrEmpty(message) || message.StartsWith("payment.star_coming_soon"))
+            {
+                message = "⭐️ Star Reaction payment is coming soon!\n\n" +
+                         "This payment method will allow you to pay by sending star reactions.\n\n" +
+                         "For now, please use Telegram Invoice payment.";
+            }
+
+            await _telegramBotService.SendMessageAsync(chatId, message, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            var errorMsg = await _localizationService.GetStringAsync("common.error", cancellationToken);
+            await _telegramBotService.SendMessageAsync(chatId, errorMsg, cancellationToken);
         }
     }
 
@@ -3067,7 +3178,7 @@ public partial class TelegramUpdateHandler
     }
 
     /// <summary>
-    /// Shows subscription payment options to user
+    /// Shows subscription payment method selection to user
     /// </summary>
     private async Task ShowSubscriptionPaymentOptionsAsync(Guid userId, Guid modelId, long chatId, CancellationToken cancellationToken)
     {
@@ -3092,11 +3203,65 @@ public partial class TelegramUpdateHandler
                 return;
             }
 
-            // Show payment invoice
             var displayText = !string.IsNullOrWhiteSpace(model.Alias) 
                 ? model.Alias 
                 : model.DisplayName;
 
+            // Build payment method selection message
+            var selectMethodMsg = await _localizationService.GetStringAsync("payment.select_method", cancellationToken);
+            var subscriptionInfo = await _localizationService.GetStringAsync("payment.subscription_info", cancellationToken);
+            
+            var message = selectMethodMsg;
+            message += string.Format(subscriptionInfo, displayText, model.SubscriptionPrice?.Amount ?? 0, model.SubscriptionDurationDays);
+
+            // Build keyboard with payment options
+            var invoiceMethodText = await _localizationService.GetStringAsync("payment.method_invoice", cancellationToken);
+            var starMethodText = await _localizationService.GetStringAsync("payment.method_star", cancellationToken);
+
+            var keyboard = new Telegram.Bot.Types.ReplyMarkups.InlineKeyboardMarkup(new[]
+            {
+                new[]
+                {
+                    Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
+                        invoiceMethodText,
+                        $"pay_invoice_sub_{modelId}"),
+                },
+                new[]
+                {
+                    Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
+                        starMethodText,
+                        $"pay_star_sub_{modelId}")
+                }
+            });
+
+            await _telegramBotService.SendMessageWithButtonsAsync(chatId, message, keyboard, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            var errorMsg = await _localizationService.GetStringAsync("error.subscribing", ex.Message);
+            await _telegramBotService.SendMessageAsync(chatId, errorMsg, cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// Handles subscription invoice payment
+    /// </summary>
+    private async Task HandleSubscriptionInvoicePaymentAsync(Guid userId, Guid modelId, long chatId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var model = await _modelService.GetModelByIdAsync(modelId, cancellationToken);
+            if (model == null || !model.CanAcceptSubscriptions())
+            {
+                await _telegramBotService.SendMessageAsync(chatId, "❌ Model not available for subscriptions.", cancellationToken);
+                return;
+            }
+
+            var displayText = !string.IsNullOrWhiteSpace(model.Alias) 
+                ? model.Alias 
+                : model.DisplayName;
+
+            // Show payment invoice
             var invoiceRequest = new Application.DTOs.CreateInvoiceRequest
             {
                 ChatId = chatId,
@@ -3123,6 +3288,33 @@ public partial class TelegramUpdateHandler
         catch (Exception ex)
         {
             var errorMsg = await _localizationService.GetStringAsync("error.subscribing", ex.Message);
+            await _telegramBotService.SendMessageAsync(chatId, errorMsg, cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// Handles subscription star reaction payment (placeholder for future implementation)
+    /// </summary>
+    private async Task HandleSubscriptionStarPaymentAsync(Guid userId, Guid modelId, long chatId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            // Note: Star Reaction payment requires Telegram.Bot v21.0.0+
+            // For now, show a message explaining this payment method is coming soon
+            var message = await _localizationService.GetStringAsync("payment.star_coming_soon", cancellationToken);
+            
+            if (string.IsNullOrEmpty(message) || message.StartsWith("payment.star_coming_soon"))
+            {
+                message = "⭐️ Star Reaction payment is coming soon!\n\n" +
+                         "This payment method will allow you to pay by sending star reactions.\n\n" +
+                         "For now, please use Telegram Invoice payment.";
+            }
+
+            await _telegramBotService.SendMessageAsync(chatId, message, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            var errorMsg = await _localizationService.GetStringAsync("common.error", cancellationToken);
             await _telegramBotService.SendMessageAsync(chatId, errorMsg, cancellationToken);
         }
     }

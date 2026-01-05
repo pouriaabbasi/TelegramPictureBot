@@ -1333,6 +1333,15 @@ Date: 2025-01-01" }
             { BotLanguage.Persian, "💎 اشتراک: {0}\n💰 قیمت: {1} ⭐️\n⏰ مدت: {2} روز\n" },
             { BotLanguage.English, "💎 Subscription: {0}\n💰 Price: {1} ⭐️\n⏰ Duration: {2} days\n" }
         },
+        ["payment.star_coming_soon"] = new()
+        {
+            { BotLanguage.Persian, "⭐️ پرداخت با Star Reaction به زودی!\n\n" +
+                "این روش پرداخت به شما اجازه می‌دهد با ارسال ری‌اکشن ستاره پرداخت کنید.\n\n" +
+                "فعلاً لطفاً از پرداخت Telegram Invoice استفاده کنید." },
+            { BotLanguage.English, "⭐️ Star Reaction payment coming soon!\n\n" +
+                "This payment method will allow you to pay by sending star reactions.\n\n" +
+                "For now, please use Telegram Invoice payment." }
+        },
         #endregion
     };
     

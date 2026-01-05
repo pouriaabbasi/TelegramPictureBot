@@ -1,13 +1,32 @@
 namespace TelegramPhotoBot.Domain.Enums;
 
 /// <summary>
-/// Payment status for Telegram Stars payments
+/// Status of a pending star payment
 /// </summary>
 public enum PaymentStatus
 {
-    Pending = 1,      // Payment initiated but not confirmed
-    Completed = 2,    // Payment successfully verified and completed
-    Failed = 3,        // Payment failed or was rejected
-    Refunded = 4      // Payment was refunded (if applicable)
+    /// <summary>
+    /// Payment is pending, waiting for stars
+    /// </summary>
+    Pending = 0,
+    
+    /// <summary>
+    /// Payment completed successfully
+    /// </summary>
+    Completed = 1,
+    
+    /// <summary>
+    /// Payment expired (timeout)
+    /// </summary>
+    Expired = 2,
+    
+    /// <summary>
+    /// Payment cancelled by user
+    /// </summary>
+    Cancelled = 3,
+    
+    /// <summary>
+    /// Payment failed
+    /// </summary>
+    Failed = 4
 }
-

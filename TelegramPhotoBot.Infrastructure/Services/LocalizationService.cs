@@ -1269,7 +1269,70 @@ Date: 2025-01-01" }
         {
             { BotLanguage.Persian, "🎁 دمو رایگان جدید!\n\n📸 {0}\n\nیکی از مدل‌ها محتوای دمو رایگان جدیدی آپلود کرده است." },
             { BotLanguage.English, "🎁 New Free Demo!\n\n📸 {0}\n\nA model has uploaded new free demo content." }
-        }
+        },
+        #endregion
+        
+        #region Payment System
+        ["payment.select_method"] = new()
+        {
+            { BotLanguage.Persian, "💳 لطفاً روش پرداخت را انتخاب کنید:\n\n" },
+            { BotLanguage.English, "💳 Please select your payment method:\n\n" }
+        },
+        ["payment.method_invoice"] = new()
+        {
+            { BotLanguage.Persian, "💳 پرداخت از طریق Telegram Invoice" },
+            { BotLanguage.English, "💳 Pay via Telegram Invoice" }
+        },
+        ["payment.method_star"] = new()
+        {
+            { BotLanguage.Persian, "⭐️ پرداخت با Star Reaction" },
+            { BotLanguage.English, "⭐️ Pay with Star Reaction" }
+        },
+        ["payment.star_instructions"] = new()
+        {
+            { BotLanguage.Persian, "⭐️ پرداخت با Star Reaction\n\n📝 راهنما:\n1️⃣ روی این پیام کلیک کنید\n2️⃣ از قسمت Reaction، ستاره (⭐️) را انتخاب کنید\n3️⃣ به تعداد {0} ستاره ارسال کنید\n4️⃣ روی دکمه تایید پرداخت کلیک کنید\n\n💰 قیمت: {0} ⭐️\n⏰ مهلت: {1} دقیقه\n\n⚠️ توجه: بعد از تایید، پیام حذف خواهد شد." },
+            { BotLanguage.English, "⭐️ Star Reaction Payment\n\n📝 Instructions:\n1️⃣ Click on this message\n2️⃣ Select star (⭐️) from Reactions\n3️⃣ Send {0} stars\n4️⃣ Click the confirm button\n\n💰 Price: {0} ⭐️\n⏰ Time limit: {1} minutes\n\n⚠️ Note: After confirmation, this message will be deleted." }
+        },
+        ["payment.star_confirm_button"] = new()
+        {
+            { BotLanguage.Persian, "✅ تایید پرداخت" },
+            { BotLanguage.English, "✅ Confirm Payment" }
+        },
+        ["payment.already_paid"] = new()
+        {
+            { BotLanguage.Persian, "✅ این پرداخت قبلاً تکمیل شده است." },
+            { BotLanguage.English, "✅ This payment has already been completed." }
+        },
+        ["payment.star_progress"] = new()
+        {
+            { BotLanguage.Persian, "{0}/{1} ⭐️ ({2}%)" },
+            { BotLanguage.English, "{0}/{1} ⭐️ ({2}%)" }
+        },
+        ["payment.star_completed"] = new()
+        {
+            { BotLanguage.Persian, "✅ پرداخت با موفقیت انجام شد!\n\n💰 مبلغ پرداختی: {0} ⭐️\n📦 محتوا در حال ارسال..." },
+            { BotLanguage.English, "✅ Payment completed successfully!\n\n💰 Amount paid: {0} ⭐️\n📦 Sending content..." }
+        },
+        ["payment.star_expired"] = new()
+        {
+            { BotLanguage.Persian, "⏰ زمان پرداخت به اتمام رسید.\n\nلطفاً دوباره تلاش کنید." },
+            { BotLanguage.English, "⏰ Payment time expired.\n\nPlease try again." }
+        },
+        ["payment.star_cancelled"] = new()
+        {
+            { BotLanguage.Persian, "❌ پرداخت لغو شد." },
+            { BotLanguage.English, "❌ Payment cancelled." }
+        },
+        ["payment.content_info"] = new()
+        {
+            { BotLanguage.Persian, "📦 محتوا: {0}\n💰 قیمت: {1} ⭐️\n" },
+            { BotLanguage.English, "📦 Content: {0}\n💰 Price: {1} ⭐️\n" }
+        },
+        ["payment.subscription_info"] = new()
+        {
+            { BotLanguage.Persian, "💎 اشتراک: {0}\n💰 قیمت: {1} ⭐️\n⏰ مدت: {2} روز\n" },
+            { BotLanguage.English, "💎 Subscription: {0}\n💰 Price: {1} ⭐️\n⏰ Duration: {2} days\n" }
+        },
         #endregion
     };
     

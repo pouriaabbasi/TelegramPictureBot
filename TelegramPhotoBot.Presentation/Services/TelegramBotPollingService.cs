@@ -151,6 +151,9 @@ public class TelegramBotPollingService : BackgroundService
                                 cancellationToken);
                         }
                         break;
+
+                    // Note: MessageReaction support requires Telegram.Bot v21.0.0 or higher
+                    // For now, Star Reaction payments will use manual confirmation via buttons
                 }
             }
             catch (Exception ex)

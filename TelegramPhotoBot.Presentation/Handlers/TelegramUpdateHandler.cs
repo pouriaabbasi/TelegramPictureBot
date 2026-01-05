@@ -508,6 +508,8 @@ public partial class TelegramUpdateHandler
             case "buy":
                 if (secondPart == "photo")
                 {
+                    // For now, use direct Telegram Invoice payment
+                    // Star Reaction payment will be implemented in future version
                     await HandleBuyPhotoCommandAsync(user.Id, thirdPart, chatId, cancellationToken);
                 }
                 else

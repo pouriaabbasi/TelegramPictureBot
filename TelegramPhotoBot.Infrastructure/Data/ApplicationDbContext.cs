@@ -28,6 +28,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<ModelTermsAcceptance> ModelTermsAcceptances => Set<ModelTermsAcceptance>();
     public DbSet<ModelPayout> ModelPayouts => Set<ModelPayout>();
     public DbSet<ContentNotification> ContentNotifications => Set<ContentNotification>();
+    public DbSet<PendingStarPayment> PendingStarPayments => Set<PendingStarPayment>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -49,6 +50,7 @@ public class ApplicationDbContext : DbContext
         modelBuilder.Entity<ModelTermsAcceptance>().HasQueryFilter(mta => !mta.IsDeleted);
         modelBuilder.Entity<ModelPayout>().HasQueryFilter(mp => !mp.IsDeleted);
         modelBuilder.Entity<ContentNotification>().HasQueryFilter(cn => !cn.IsDeleted);
+        modelBuilder.Entity<PendingStarPayment>().HasQueryFilter(psp => !psp.IsDeleted);
     }
 
     public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)

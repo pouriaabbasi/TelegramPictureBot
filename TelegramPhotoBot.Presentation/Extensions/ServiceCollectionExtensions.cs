@@ -70,6 +70,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IModelTermsAcceptanceRepository, ModelTermsAcceptanceRepository>();
         services.AddScoped<IModelPayoutRepository, ModelPayoutRepository>();
         services.AddScoped<IContentNotificationRepository, ContentNotificationRepository>();
+        services.AddScoped<IPendingStarPaymentRepository, PendingStarPaymentRepository>();
 
         // Telegram Services - Bot Token MUST be in appsettings.json (required for bootstrapping)
         var botToken = configuration["Telegram:BotToken"] 

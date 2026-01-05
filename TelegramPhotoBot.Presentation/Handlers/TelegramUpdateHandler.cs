@@ -559,7 +559,8 @@ public partial class TelegramUpdateHandler
             case "sub":
                 if (secondPart == "model" && Guid.TryParse(thirdPart, out var subModelId))
                 {
-                    await HandleSubscribeToModelAsync(user.Id, subModelId, chatId, cancellationToken);
+                    // Show subscription payment options instead of direct subscribe
+                    await ShowSubscriptionPaymentOptionsAsync(user.Id, subModelId, chatId, cancellationToken);
                 }
                 break;
 
@@ -3066,7 +3067,69 @@ public partial class TelegramUpdateHandler
     }
 
     /// <summary>
-    /// Handles model subscription purchase
+    /// Shows subscription payment options to user
+    /// </summary>
+    private async Task ShowSubscriptionPaymentOptionsAsync(Guid userId, Guid modelId, long chatId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var model = await _modelService.GetModelByIdAsync(modelId, cancellationToken);
+            if (model == null || !model.CanAcceptSubscriptions())
+            {
+                await _telegramBotService.SendMessageAsync(chatId, "❌ Model not available for subscriptions.", cancellationToken);
+                return;
+            }
+
+            // Check if already subscribed
+            var hasSubscription = await _modelSubscriptionService.HasActiveSubscriptionAsync(userId, modelId, cancellationToken);
+            if (hasSubscription)
+            {
+                var modelDisplayText = !string.IsNullOrWhiteSpace(model.Alias) 
+                    ? model.Alias 
+                    : model.DisplayName;
+                
+                await _telegramBotService.SendMessageAsync(chatId, $"✅ You already have an active subscription to {modelDisplayText}!", cancellationToken);
+                return;
+            }
+
+            // Show payment invoice
+            var displayText = !string.IsNullOrWhiteSpace(model.Alias) 
+                ? model.Alias 
+                : model.DisplayName;
+
+            var invoiceRequest = new Application.DTOs.CreateInvoiceRequest
+            {
+                ChatId = chatId,
+                Title = $"💎 Subscribe to {displayText}",
+                Description = $"Get unlimited access to all premium content for {model.SubscriptionDurationDays} days",
+                Payload = $"subscription_{model.Id}_{userId}",
+                ProviderToken = "", // Empty for Telegram Stars
+                Currency = "XTR", // Telegram Stars currency
+                Amount = model.SubscriptionPrice?.Amount ?? 0,
+                Prices = new Dictionary<string, string>
+                {
+                    { "Subscription", (model.SubscriptionPrice?.Amount ?? 0).ToString() }
+                }
+            };
+
+            var invoiceId = await _telegramBotService.CreateInvoiceAsync(invoiceRequest, cancellationToken);
+
+            if (invoiceId == null)
+            {
+                var invoiceFailedMsg = await _localizationService.GetStringAsync("purchase.invoice_failed", cancellationToken);
+                await _telegramBotService.SendMessageAsync(chatId, invoiceFailedMsg, cancellationToken);
+            }
+        }
+        catch (Exception ex)
+        {
+            var errorMsg = await _localizationService.GetStringAsync("error.subscribing", ex.Message);
+            await _telegramBotService.SendMessageAsync(chatId, errorMsg, cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// Handles model subscription purchase (DEPRECATED - Use ShowSubscriptionPaymentOptionsAsync instead)
+    /// This method is kept for backward compatibility but should not be called directly
     /// </summary>
     private async Task HandleSubscribeToModelAsync(Guid userId, Guid modelId, long chatId, CancellationToken cancellationToken)
     {

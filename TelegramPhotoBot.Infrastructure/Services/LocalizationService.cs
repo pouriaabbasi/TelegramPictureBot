@@ -1256,6 +1256,19 @@ Date: 2025-01-01" }
         {
             { BotLanguage.Persian, "📊 هنوز داده‌ای موجود نیست.\n\nبعد از فروش محتوا، آمار برترین‌ها اینجا نمایش داده می‌شود!" },
             { BotLanguage.English, "📊 No data available yet.\n\nOnce you start selling content, top performers will appear here!" }
+        },
+        #endregion
+        
+        #region Notifications
+        ["notification.new_content"] = new()
+        {
+            { BotLanguage.Persian, "🎉 محتوای جدید!\n\n📸 {0}\n\nیکی از مدل‌های مورد علاقه شما محتوای جدیدی آپلود کرده است. برای مشاهده به منوی اشتراک‌ها بروید." },
+            { BotLanguage.English, "🎉 New Content!\n\n📸 {0}\n\nOne of your favorite models has uploaded new content. Go to My Subscriptions to view it." }
+        },
+        ["notification.new_demo"] = new()
+        {
+            { BotLanguage.Persian, "🎁 دمو رایگان جدید!\n\n📸 {0}\n\nیکی از مدل‌ها محتوای دمو رایگان جدیدی آپلود کرده است." },
+            { BotLanguage.English, "🎁 New Free Demo!\n\n📸 {0}\n\nA model has uploaded new free demo content." }
         }
         #endregion
     };

@@ -27,6 +27,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<UserContactVerification> UserContactVerifications => Set<UserContactVerification>();
     public DbSet<ModelTermsAcceptance> ModelTermsAcceptances => Set<ModelTermsAcceptance>();
     public DbSet<ModelPayout> ModelPayouts => Set<ModelPayout>();
+    public DbSet<ContentNotification> ContentNotifications => Set<ContentNotification>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -47,6 +48,7 @@ public class ApplicationDbContext : DbContext
         modelBuilder.Entity<UserContactVerification>().HasQueryFilter(ucv => !ucv.IsDeleted);
         modelBuilder.Entity<ModelTermsAcceptance>().HasQueryFilter(mta => !mta.IsDeleted);
         modelBuilder.Entity<ModelPayout>().HasQueryFilter(mp => !mp.IsDeleted);
+        modelBuilder.Entity<ContentNotification>().HasQueryFilter(cn => !cn.IsDeleted);
     }
 
     public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)

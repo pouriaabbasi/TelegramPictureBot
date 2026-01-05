@@ -41,6 +41,7 @@ public partial class TelegramUpdateHandler
     private readonly IRevenueAnalyticsService _revenueAnalyticsService;
     private readonly IModelTermsService _modelTermsService;
     private readonly ILocalizationService _localizationService;
+    private readonly INotificationService _notificationService;
 
     public TelegramUpdateHandler(
         IUserService userService,
@@ -68,7 +69,8 @@ public partial class TelegramUpdateHandler
         ISingleModelModeService singleModelModeService,
         IModelTermsService modelTermsService,
         IRevenueAnalyticsService revenueAnalyticsService,
-        ILocalizationService localizationService)
+        ILocalizationService localizationService,
+        INotificationService notificationService)
     {
         _userService = userService ?? throw new ArgumentNullException(nameof(userService));
         _contentAuthorizationService = contentAuthorizationService ?? throw new ArgumentNullException(nameof(contentAuthorizationService));
@@ -96,6 +98,7 @@ public partial class TelegramUpdateHandler
         _modelTermsService = modelTermsService ?? throw new ArgumentNullException(nameof(modelTermsService));
         _revenueAnalyticsService = revenueAnalyticsService ?? throw new ArgumentNullException(nameof(revenueAnalyticsService));
         _localizationService = localizationService ?? throw new ArgumentNullException(nameof(localizationService));
+        _notificationService = notificationService ?? throw new ArgumentNullException(nameof(notificationService));
     }
 
     /// <summary>

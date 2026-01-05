@@ -125,6 +125,23 @@ public partial class TelegramUpdateHandler
             await _userStateRepository.ClearStateAsync(userId, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
+            // Create notifications for subscribers (fire and forget)
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    var notificationsCreated = await _notificationService.CreateNotificationsForNewContentAsync(
+                        model.Id, 
+                        demoPhoto.Id, 
+                        cancellationToken);
+                    Console.WriteLine($"✅ Created {notificationsCreated} notifications for demo content {demoPhoto.Id}");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"❌ Error creating notifications: {ex.Message}");
+                }
+            }, cancellationToken);
+
             // Notify admins about new demo media upload (WITHOUT secure mode)
             var uploader = await _userRepository.GetByIdAsync(userId, cancellationToken);
             if (uploader != null)
@@ -249,6 +266,23 @@ public partial class TelegramUpdateHandler
             // Clear state
             await _userStateRepository.ClearStateAsync(userId, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            // Create notifications for subscribers (fire and forget)
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    var notificationsCreated = await _notificationService.CreateNotificationsForNewContentAsync(
+                        model.Id, 
+                        premiumPhoto.Id, 
+                        cancellationToken);
+                    Console.WriteLine($"✅ Created {notificationsCreated} notifications for premium content {premiumPhoto.Id}");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"❌ Error creating notifications: {ex.Message}");
+                }
+            }, cancellationToken);
 
             // Notify admins about new premium media upload (WITHOUT secure mode)
             var uploader = await _userRepository.GetByIdAsync(userId, cancellationToken);

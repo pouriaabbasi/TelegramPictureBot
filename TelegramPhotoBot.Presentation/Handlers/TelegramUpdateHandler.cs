@@ -516,9 +516,11 @@ public partial class TelegramUpdateHandler
             case "buy":
                 if (secondPart == "photo")
                 {
-                    // For now, use direct Telegram Invoice payment
-                    // Star Reaction payment will be implemented in future version
-                    await HandleBuyPhotoCommandAsync(user.Id, thirdPart, chatId, cancellationToken);
+                    // Show coupon prompt first before payment method selection
+                    if (Guid.TryParse(thirdPart, out var buyPhotoId))
+                    {
+                        await ShowCouponPromptForPhotoAsync(user.Id, buyPhotoId, chatId, cancellationToken);
+                    }
                 }
                 else
                 {
@@ -600,8 +602,27 @@ public partial class TelegramUpdateHandler
             case "sub":
                 if (secondPart == "model" && Guid.TryParse(thirdPart, out var subModelId))
                 {
-                    // Show subscription payment options instead of direct subscribe
-                    await ShowSubscriptionPaymentOptionsAsync(user.Id, subModelId, chatId, cancellationToken);
+                    // Show coupon prompt first before payment method selection
+                    await ShowCouponPromptForSubscriptionAsync(user.Id, subModelId, chatId, cancellationToken);
+                }
+                break;
+
+            case "skip":
+                // Skip coupon and go to payment method selection
+                if (secondPart == "coupon")
+                {
+                    if (thirdPart == "photo" && parts.Length > 3 && Guid.TryParse(parts[3], out var skipCouponPhotoId))
+                    {
+                        await _userStateRepository.ClearStateAsync(user.Id, cancellationToken);
+                        await _unitOfWork.SaveChangesAsync(cancellationToken);
+                        await HandleBuyPhotoCommandAsync(user.Id, parts[3], chatId, cancellationToken);
+                    }
+                    else if (thirdPart == "sub" && parts.Length > 3 && Guid.TryParse(parts[3], out var skipCouponModelId))
+                    {
+                        await _userStateRepository.ClearStateAsync(user.Id, cancellationToken);
+                        await _unitOfWork.SaveChangesAsync(cancellationToken);
+                        await ShowSubscriptionPaymentOptionsAsync(user.Id, skipCouponModelId, chatId, cancellationToken);
+                    }
                 }
                 break;
 
@@ -645,6 +666,29 @@ public partial class TelegramUpdateHandler
                         await HandleAdminDisableSingleModelModeAsync(user.Id, chatId, cancellationToken);
                     }
                 }
+                else if (secondPart == "manage" && thirdPart == "coupons")
+                {
+                    await HandleAdminManageCouponsAsync(user.Id, chatId, cancellationToken);
+                }
+                else if (secondPart == "coupon")
+                {
+                    if (parts.Length > 3 && thirdPart == "view" && Guid.TryParse(parts[3], out var adminViewCouponId))
+                    {
+                        await HandleAdminCouponViewAsync(user.Id, adminViewCouponId, chatId, cancellationToken);
+                    }
+                    else if (parts.Length > 3 && thirdPart == "stats" && Guid.TryParse(parts[3], out var adminStatsCouponId))
+                    {
+                        await HandleAdminCouponStatsAsync(user.Id, adminStatsCouponId, chatId, cancellationToken);
+                    }
+                    else if (parts.Length > 3 && thirdPart == "activate" && Guid.TryParse(parts[3], out var adminActivateCouponId))
+                    {
+                        await HandleAdminCouponActivateAsync(user.Id, adminActivateCouponId, chatId, cancellationToken);
+                    }
+                    else if (parts.Length > 3 && thirdPart == "deactivate" && Guid.TryParse(parts[3], out var adminDeactivateCouponId))
+                    {
+                        await HandleAdminCouponDeactivateAsync(user.Id, adminDeactivateCouponId, chatId, cancellationToken);
+                    }
+                }
                 break;
 
             case "terms":
@@ -685,6 +729,29 @@ public partial class TelegramUpdateHandler
                     case "top_content":
                         await HandleModelTopContentAsync(user.Id, chatId, cancellationToken);
                         break;
+                    case "manage_coupons":
+                        await HandleModelManageCouponsAsync(user.Id, chatId, cancellationToken);
+                        break;
+                }
+                break;
+
+            case "coupon":
+                // Coupon management actions
+                if (secondPart == "view" && Guid.TryParse(thirdPart, out var viewCouponId))
+                {
+                    await HandleCouponViewAsync(user.Id, viewCouponId, chatId, cancellationToken);
+                }
+                else if (secondPart == "stats" && Guid.TryParse(thirdPart, out var statsCouponId))
+                {
+                    await HandleCouponStatsAsync(user.Id, statsCouponId, chatId, cancellationToken);
+                }
+                else if (secondPart == "activate" && Guid.TryParse(thirdPart, out var activateCouponId))
+                {
+                    await HandleCouponActivateAsync(user.Id, activateCouponId, chatId, cancellationToken);
+                }
+                else if (secondPart == "deactivate" && Guid.TryParse(thirdPart, out var deactivateCouponId))
+                {
+                    await HandleCouponDeactivateAsync(user.Id, deactivateCouponId, chatId, cancellationToken);
                 }
                 break;
 
@@ -771,6 +838,24 @@ public partial class TelegramUpdateHandler
 
                 case Domain.Enums.UserStateType.SettingModelAlias:
                     await HandleModelAliasInputAsync(userId, chatId, message.Text, cancellationToken);
+                    break;
+
+                case Domain.Enums.UserStateType.EnteringCouponForPhoto:
+                    if (!string.IsNullOrWhiteSpace(message.Text) && 
+                        !string.IsNullOrWhiteSpace(userState.StateData) && 
+                        Guid.TryParse(userState.StateData, out var couponPhotoId))
+                    {
+                        await HandleCouponInputForPhotoAsync(userId, message.Text.Trim(), couponPhotoId, chatId, cancellationToken);
+                    }
+                    break;
+
+                case Domain.Enums.UserStateType.EnteringCouponForSubscription:
+                    if (!string.IsNullOrWhiteSpace(message.Text) && 
+                        !string.IsNullOrWhiteSpace(userState.StateData) && 
+                        Guid.TryParse(userState.StateData, out var couponModelId))
+                    {
+                        await HandleCouponInputForSubscriptionAsync(userId, message.Text.Trim(), couponModelId, chatId, cancellationToken);
+                    }
                     break;
 
                 default:
@@ -2698,7 +2783,16 @@ public partial class TelegramUpdateHandler
                     "model_manage_subscription")
             });
 
-            // Row 6: Back button
+            // Row 6: Coupon Management
+            var manageCouponsText = await _localizationService.GetStringAsync("coupon.manage", cancellationToken);
+            buttons.Add(new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
+            {
+                Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
+                    manageCouponsText,
+                    "model_manage_coupons")
+            });
+
+            // Row 7: Back button
             var backText = await _localizationService.GetStringAsync("menu.back", cancellationToken);
             buttons.Add(new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
             {
@@ -2888,6 +2982,7 @@ public partial class TelegramUpdateHandler
             // Add platform settings and refresh buttons
             var settingsText = await _localizationService.GetStringAsync("admin.settings", cancellationToken);
             var refreshText = await _localizationService.GetStringAsync("admin.button.refresh", cancellationToken);
+            var manageCouponsText = await _localizationService.GetStringAsync("coupon.admin.manage", cancellationToken);
             var backText = await _localizationService.GetStringAsync("menu.back", cancellationToken);
             
             buttons.Add(new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
@@ -2895,6 +2990,13 @@ public partial class TelegramUpdateHandler
                 Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
                     settingsText,
                     "admin_settings"),
+                Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
+                    manageCouponsText,
+                    "admin_manage_coupons")
+            });
+            
+            buttons.Add(new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton>
+            {
                 Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
                     refreshText,
                     "menu_admin_panel")

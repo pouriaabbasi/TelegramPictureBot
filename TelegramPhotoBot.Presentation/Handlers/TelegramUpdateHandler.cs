@@ -44,6 +44,8 @@ public partial class TelegramUpdateHandler
     private readonly IModelTermsService _modelTermsService;
     private readonly ILocalizationService _localizationService;
     private readonly INotificationService _notificationService;
+    private readonly ICouponService _couponService;
+    private readonly ICouponRepository _couponRepository;
 
     public TelegramUpdateHandler(
         IUserService userService,
@@ -72,7 +74,9 @@ public partial class TelegramUpdateHandler
         IModelTermsService modelTermsService,
         IRevenueAnalyticsService revenueAnalyticsService,
         ILocalizationService localizationService,
-        INotificationService notificationService)
+        INotificationService notificationService,
+        ICouponService couponService,
+        ICouponRepository couponRepository)
     {
         _userService = userService ?? throw new ArgumentNullException(nameof(userService));
         _contentAuthorizationService = contentAuthorizationService ?? throw new ArgumentNullException(nameof(contentAuthorizationService));
@@ -101,6 +105,8 @@ public partial class TelegramUpdateHandler
         _revenueAnalyticsService = revenueAnalyticsService ?? throw new ArgumentNullException(nameof(revenueAnalyticsService));
         _localizationService = localizationService ?? throw new ArgumentNullException(nameof(localizationService));
         _notificationService = notificationService ?? throw new ArgumentNullException(nameof(notificationService));
+        _couponService = couponService ?? throw new ArgumentNullException(nameof(couponService));
+        _couponRepository = couponRepository ?? throw new ArgumentNullException(nameof(couponRepository));
     }
 
     /// <summary>

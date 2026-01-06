@@ -68,6 +68,36 @@ public enum UserStateType
     /// <summary>
     /// Model setting their alias/nickname
     /// </summary>
-    SettingModelAlias = 12
+    SettingModelAlias = 12,
+    
+    /// <summary>
+    /// Model creating coupon - entering code
+    /// </summary>
+    CreatingCouponCode = 13,
+    
+    /// <summary>
+    /// Model creating coupon - entering discount percentage
+    /// </summary>
+    CreatingCouponDiscount = 14,
+    
+    /// <summary>
+    /// Model creating coupon - entering expiry days
+    /// </summary>
+    CreatingCouponExpiry = 15,
+    
+    /// <summary>
+    /// Model creating coupon - entering max uses
+    /// </summary>
+    CreatingCouponMaxUses = 16,
+    
+    /// <summary>
+    /// User entering coupon code for photo purchase
+    /// </summary>
+    EnteringCouponForPhoto = 17,
+    
+    /// <summary>
+    /// User entering coupon code for subscription purchase
+    /// </summary>
+    EnteringCouponForSubscription = 18
 }
 

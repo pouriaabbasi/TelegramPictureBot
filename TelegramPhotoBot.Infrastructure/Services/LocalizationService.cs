@@ -1368,6 +1368,286 @@ Date: 2025-01-01" }
             { BotLanguage.English, "✅ Star payment completed!" }
         },
         #endregion
+
+        #region Coupon Messages
+        ["coupon.enter_code"] = new()
+        {
+            { BotLanguage.Persian, "🎫 کد کوپن خود را وارد کنید:" },
+            { BotLanguage.English, "🎫 Enter your coupon code:" }
+        },
+        ["coupon.apply"] = new()
+        {
+            { BotLanguage.Persian, "🎫 اعمال کوپن" },
+            { BotLanguage.English, "🎫 Apply Coupon" }
+        },
+        ["coupon.skip"] = new()
+        {
+            { BotLanguage.Persian, "⏭️ بدون کوپن ادامه بده" },
+            { BotLanguage.English, "⏭️ Continue Without Coupon" }
+        },
+        ["coupon.applied"] = new()
+        {
+            { BotLanguage.Persian, "✅ کوپن با موفقیت اعمال شد!\n\n" +
+                "💰 قیمت اصلی: {0} ⭐️\n" +
+                "🎫 تخفیف ({1}%): {2} ⭐️\n" +
+                "💳 قیمت نهایی: {3} ⭐️" },
+            { BotLanguage.English, "✅ Coupon applied successfully!\n\n" +
+                "💰 Original price: {0} ⭐️\n" +
+                "🎫 Discount ({1}%): {2} ⭐️\n" +
+                "💳 Final price: {3} ⭐️" }
+        },
+        ["coupon.error.not_found"] = new()
+        {
+            { BotLanguage.Persian, "❌ کوپن وارد شده یافت نشد." },
+            { BotLanguage.English, "❌ Coupon code not found." }
+        },
+        ["coupon.error.invalid"] = new()
+        {
+            { BotLanguage.Persian, "❌ این کوپن معتبر نیست یا منقضی شده است." },
+            { BotLanguage.English, "❌ This coupon is invalid or expired." }
+        },
+        ["coupon.error.already_used"] = new()
+        {
+            { BotLanguage.Persian, "❌ شما قبلاً از این کوپن استفاده کرده‌اید." },
+            { BotLanguage.English, "❌ You have already used this coupon." }
+        },
+        ["coupon.error.content_only"] = new()
+        {
+            { BotLanguage.Persian, "❌ این کوپن فقط برای خرید محتوا قابل استفاده است." },
+            { BotLanguage.English, "❌ This coupon is only valid for content purchases." }
+        },
+        ["coupon.error.subscription_only"] = new()
+        {
+            { BotLanguage.Persian, "❌ این کوپن فقط برای خرید اشتراک قابل استفاده است." },
+            { BotLanguage.English, "❌ This coupon is only valid for subscription purchases." }
+        },
+        ["coupon.error.wrong_model"] = new()
+        {
+            { BotLanguage.Persian, "❌ این کوپن برای این مدل قابل استفاده نیست." },
+            { BotLanguage.English, "❌ This coupon is not valid for this model." }
+        },
+        
+        // Model Dashboard - Coupon Management
+        ["coupon.manage"] = new()
+        {
+            { BotLanguage.Persian, "🎫 مدیریت کوپن‌ها" },
+            { BotLanguage.English, "🎫 Manage Coupons" }
+        },
+        ["coupon.create"] = new()
+        {
+            { BotLanguage.Persian, "➕ ایجاد کوپن جدید" },
+            { BotLanguage.English, "➕ Create New Coupon" }
+        },
+        ["coupon.my_coupons"] = new()
+        {
+            { BotLanguage.Persian, "📋 کوپن‌های من" },
+            { BotLanguage.English, "📋 My Coupons" }
+        },
+        ["coupon.list_empty"] = new()
+        {
+            { BotLanguage.Persian, "📭 شما هیچ کوپنی ندارید." },
+            { BotLanguage.English, "📭 You don't have any coupons." }
+        },
+        ["coupon.details"] = new()
+        {
+            { BotLanguage.Persian, "🎫 کد: {0}\n" +
+                "📊 تخفیف: {1}%\n" +
+                "🎯 نوع: {2}\n" +
+                "📅 از: {3}\n" +
+                "📅 تا: {4}\n" +
+                "🔢 استفاده: {5}/{6}\n" +
+                "✅ وضعیت: {7}" },
+            { BotLanguage.English, "🎫 Code: {0}\n" +
+                "📊 Discount: {1}%\n" +
+                "🎯 Type: {2}\n" +
+                "📅 From: {3}\n" +
+                "📅 To: {4}\n" +
+                "🔢 Used: {5}/{6}\n" +
+                "✅ Status: {7}" }
+        },
+        ["coupon.type.content"] = new()
+        {
+            { BotLanguage.Persian, "محتوا" },
+            { BotLanguage.English, "Content" }
+        },
+        ["coupon.type.subscription"] = new()
+        {
+            { BotLanguage.Persian, "اشتراک" },
+            { BotLanguage.English, "Subscription" }
+        },
+        ["coupon.status.active"] = new()
+        {
+            { BotLanguage.Persian, "فعال" },
+            { BotLanguage.English, "Active" }
+        },
+        ["coupon.status.inactive"] = new()
+        {
+            { BotLanguage.Persian, "غیرفعال" },
+            { BotLanguage.English, "Inactive" }
+        },
+        ["coupon.activate"] = new()
+        {
+            { BotLanguage.Persian, "✅ فعال‌سازی" },
+            { BotLanguage.English, "✅ Activate" }
+        },
+        ["coupon.deactivate"] = new()
+        {
+            { BotLanguage.Persian, "❌ غیرفعال‌سازی" },
+            { BotLanguage.English, "❌ Deactivate" }
+        },
+        ["coupon.view_stats"] = new()
+        {
+            { BotLanguage.Persian, "📊 مشاهده آمار" },
+            { BotLanguage.English, "📊 View Statistics" }
+        },
+        ["coupon.activated"] = new()
+        {
+            { BotLanguage.Persian, "✅ کوپن با موفقیت فعال شد." },
+            { BotLanguage.English, "✅ Coupon activated successfully." }
+        },
+        ["coupon.deactivated"] = new()
+        {
+            { BotLanguage.Persian, "❌ کوپن با موفقیت غیرفعال شد." },
+            { BotLanguage.English, "❌ Coupon deactivated successfully." }
+        },
+        
+        // Create Coupon Flow
+        ["coupon.create.code_prompt"] = new()
+        {
+            { BotLanguage.Persian, "🎫 کد کوپن را وارد کنید:\n\n" +
+                "(فقط حروف و اعداد، بدون فاصله)" },
+            { BotLanguage.English, "🎫 Enter coupon code:\n\n" +
+                "(Letters and numbers only, no spaces)" }
+        },
+        ["coupon.create.discount_prompt"] = new()
+        {
+            { BotLanguage.Persian, "📊 درصد تخفیف را وارد کنید (1-100):" },
+            { BotLanguage.English, "📊 Enter discount percentage (1-100):" }
+        },
+        ["coupon.create.type_prompt"] = new()
+        {
+            { BotLanguage.Persian, "🎯 این کوپن برای چه چیزی است؟" },
+            { BotLanguage.English, "🎯 What is this coupon for?" }
+        },
+        ["coupon.create.type.content"] = new()
+        {
+            { BotLanguage.Persian, "📦 خرید محتوا" },
+            { BotLanguage.English, "📦 Content Purchase" }
+        },
+        ["coupon.create.type.subscription"] = new()
+        {
+            { BotLanguage.Persian, "💎 خرید اشتراک" },
+            { BotLanguage.English, "💎 Subscription Purchase" }
+        },
+        ["coupon.create.expiry_prompt"] = new()
+        {
+            { BotLanguage.Persian, "📅 آیا می‌خواهید تاریخ انقضا تنظیم کنید؟" },
+            { BotLanguage.English, "📅 Do you want to set an expiration date?" }
+        },
+        ["coupon.create.no_expiry"] = new()
+        {
+            { BotLanguage.Persian, "♾️ بدون تاریخ انقضا" },
+            { BotLanguage.English, "♾️ No Expiration" }
+        },
+        ["coupon.create.set_expiry"] = new()
+        {
+            { BotLanguage.Persian, "📅 تنظیم تاریخ انقضا" },
+            { BotLanguage.English, "📅 Set Expiration" }
+        },
+        ["coupon.create.expiry_days"] = new()
+        {
+            { BotLanguage.Persian, "📅 تعداد روز تا انقضا را وارد کنید:" },
+            { BotLanguage.English, "📅 Enter number of days until expiration:" }
+        },
+        ["coupon.create.max_uses_prompt"] = new()
+        {
+            { BotLanguage.Persian, "🔢 تعداد دفعات استفاده را وارد کنید:\n\n" +
+                "(0 = نامحدود)" },
+            { BotLanguage.English, "🔢 Enter maximum number of uses:\n\n" +
+                "(0 = unlimited)" }
+        },
+        ["coupon.created"] = new()
+        {
+            { BotLanguage.Persian, "✅ کوپن با موفقیت ایجاد شد!\n\n" +
+                "🎫 کد: {0}" },
+            { BotLanguage.English, "✅ Coupon created successfully!\n\n" +
+                "🎫 Code: {0}" }
+        },
+        ["coupon.error.code_exists"] = new()
+        {
+            { BotLanguage.Persian, "❌ این کد کوپن قبلاً استفاده شده است." },
+            { BotLanguage.English, "❌ This coupon code already exists." }
+        },
+        ["coupon.error.max_limit"] = new()
+        {
+            { BotLanguage.Persian, "❌ شما حداکثر تعداد کوپن فعال ({0} عدد) را دارید.\n\n" +
+                "لطفاً ابتدا یکی از کوپن‌های قبلی را غیرفعال کنید." },
+            { BotLanguage.English, "❌ You have reached the maximum limit of {0} active coupons.\n\n" +
+                "Please deactivate one of your existing coupons first." }
+        },
+        ["coupon.error.invalid_code"] = new()
+        {
+            { BotLanguage.Persian, "❌ کد کوپن نامعتبر است. فقط از حروف و اعداد استفاده کنید." },
+            { BotLanguage.English, "❌ Invalid coupon code. Use only letters and numbers." }
+        },
+        ["coupon.error.invalid_discount"] = new()
+        {
+            { BotLanguage.Persian, "❌ درصد تخفیف باید بین 1 تا 100 باشد." },
+            { BotLanguage.English, "❌ Discount percentage must be between 1 and 100." }
+        },
+        ["coupon.error.invalid_days"] = new()
+        {
+            { BotLanguage.Persian, "❌ تعداد روز باید عدد مثبت باشد." },
+            { BotLanguage.English, "❌ Number of days must be a positive number." }
+        },
+        ["coupon.error.invalid_uses"] = new()
+        {
+            { BotLanguage.Persian, "❌ تعداد استفاده باید عدد 0 یا بیشتر باشد." },
+            { BotLanguage.English, "❌ Number of uses must be 0 or greater." }
+        },
+        
+        // Admin Coupon Management
+        ["coupon.admin.manage"] = new()
+        {
+            { BotLanguage.Persian, "🎫 مدیریت کوپن‌های پلتفرم" },
+            { BotLanguage.English, "🎫 Manage Platform Coupons" }
+        },
+        ["coupon.admin.create"] = new()
+        {
+            { BotLanguage.Persian, "➕ ایجاد کوپن پلتفرم" },
+            { BotLanguage.English, "➕ Create Platform Coupon" }
+        },
+        ["coupon.admin.list"] = new()
+        {
+            { BotLanguage.Persian, "📋 لیست کوپن‌های پلتفرم" },
+            { BotLanguage.English, "📋 List Platform Coupons" }
+        },
+        
+        // Coupon Usage Statistics
+        ["coupon.stats.title"] = new()
+        {
+            { BotLanguage.Persian, "📊 آمار استفاده از کوپن: {0}\n\n" },
+            { BotLanguage.English, "📊 Coupon Usage Statistics: {0}\n\n" }
+        },
+        ["coupon.stats.no_usage"] = new()
+        {
+            { BotLanguage.Persian, "📭 هنوز کسی از این کوپن استفاده نکرده است." },
+            { BotLanguage.English, "📭 No one has used this coupon yet." }
+        },
+        ["coupon.stats.usage_item"] = new()
+        {
+            { BotLanguage.Persian, "👤 کاربر: {0}\n" +
+                "📅 تاریخ: {1}\n" +
+                "💰 قیمت اصلی: {2} ⭐️\n" +
+                "🎫 تخفیف: {3} ⭐️\n" +
+                "💳 پرداخت شده: {4} ⭐️\n" },
+            { BotLanguage.English, "👤 User: {0}\n" +
+                "📅 Date: {1}\n" +
+                "💰 Original: {2} ⭐️\n" +
+                "🎫 Discount: {3} ⭐️\n" +
+                "💳 Paid: {4} ⭐️\n" }
+        },
+        #endregion
     };
     
     public LocalizationService(

@@ -29,6 +29,8 @@ public class ApplicationDbContext : DbContext
     public DbSet<ModelPayout> ModelPayouts => Set<ModelPayout>();
     public DbSet<ContentNotification> ContentNotifications => Set<ContentNotification>();
     public DbSet<PendingStarPayment> PendingStarPayments => Set<PendingStarPayment>();
+    public DbSet<Coupon> Coupons => Set<Coupon>();
+    public DbSet<CouponUsage> CouponUsages => Set<CouponUsage>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -51,6 +53,8 @@ public class ApplicationDbContext : DbContext
         modelBuilder.Entity<ModelPayout>().HasQueryFilter(mp => !mp.IsDeleted);
         modelBuilder.Entity<ContentNotification>().HasQueryFilter(cn => !cn.IsDeleted);
         modelBuilder.Entity<PendingStarPayment>().HasQueryFilter(psp => !psp.IsDeleted);
+        modelBuilder.Entity<Coupon>().HasQueryFilter(c => !c.IsDeleted);
+        modelBuilder.Entity<CouponUsage>().HasQueryFilter(cu => !cu.IsDeleted);
     }
 
     public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)

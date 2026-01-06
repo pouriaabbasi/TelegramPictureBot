@@ -7,9 +7,9 @@
 
 ## 📊 Status Summary
 - **Total Tasks**: 13
-- **Pending**: 8
+- **Pending**: 7
 - **In Progress**: 0
-- **Completed**: 5
+- **Completed**: 6
 
 ---
 
@@ -304,58 +304,39 @@ Wishlist:
 
 ### 9️⃣ **Discount & Coupon System**
 **Priority**: Low  
-**Status**: Pending  
+**Status**: ✅ Completed  
 **ID**: `coupon-system`
 
 **Description**:
-سیستم کوپن تخفیف:
-- کد تخفیف (Coupon Code)
-- درصد تخفیف یا مقدار ثابت
-- Bundle Deals (خرید چند محتوا با تخفیف)
-- محدودیت زمانی
-- محدودیت تعداد استفاده
-- فقط برای کاربران خاص
+سیستم کوپن تخفیف کامل با قابلیت مدیریت توسط Admin و Models
 
-**Technical Details**:
-- Create `Coupon` entity
-- Validation logic
-- Apply discount at checkout
-- Track usage
-- Admin panel for creating coupons
+**Implementation Details**:
+- ✅ Created `Coupon` and `CouponUsage` entities
+- ✅ Created `ICouponService` and `CouponService`
+- ✅ Implemented full coupon creation workflow:
+  - Step-by-step guided creation (code, discount%, usage type, dates, max uses)
+  - Inline buttons for selections and optional fields
+  - Full validation at each step
+  - State persistence with timeout
+- ✅ Model Dashboard: Manage Coupons (max 5 active per model)
+- ✅ Admin Panel: Manage Platform Coupons (unlimited)
+- ✅ Payment flow integration:
+  - Coupon prompt before checkout
+  - Real-time validation
+  - Discounted price display
+  - 50/50 discount cost split between model and platform
+- ✅ Features:
+  - Percentage-based discounts
+  - Optional expiration dates (ValidFrom/ValidTo)
+  - Optional max total uses
+  - Model-specific or platform-wide coupons
+  - Single-use per user enforcement
+  - Content or Subscription purchase types
+  - No coupon stacking (one per purchase)
+- ✅ Localized all messages (Persian/English)
+- ✅ Created EF Core migration (`AddCouponSystem`)
 
-**Database Schema**:
-```csharp
-public class Coupon : BaseEntity
-{
-    public string Code { get; set; } // "SUMMER2024"
-    public DiscountType Type { get; set; } // Percentage, FixedAmount
-    public int Value { get; set; } // 20 (for 20% or 20 Stars)
-    public DateTime? ValidFrom { get; set; }
-    public DateTime? ValidTo { get; set; }
-    public int? MaxUses { get; set; }
-    public int UsedCount { get; set; }
-    public Guid? ModelId { get; set; } // null = all models
-    public bool IsActive { get; set; }
-}
-
-public class CouponUsage : BaseEntity
-{
-    public Guid CouponId { get; set; }
-    public Guid UserId { get; set; }
-    public Guid PurchaseId { get; set; }
-    public int DiscountAmount { get; set; }
-}
-```
-
-**User Flow**:
-```
-Purchase Flow:
-  Price: 100 Stars
-  [💳 Have a coupon?]
-  → Input: SUMMER20
-  → Applied! New Price: 80 Stars (-20%)
-  [✅ Confirm Purchase]
-```
+**Completed**: 2025-01-06
 
 ---
 

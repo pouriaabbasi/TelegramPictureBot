@@ -315,4 +315,37 @@ public partial class TelegramUpdateHandler
             await _telegramBotService.SendMessageAsync(chatId, $"❌ Error: {ex.Message}", cancellationToken);
         }
     }
+
+    /// <summary>
+    /// Starts the coupon creation workflow for admins
+    /// </summary>
+    private async Task HandleAdminCreateCouponStartAsync(Guid userId, long chatId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var isAdmin = await _authorizationService.IsAdminAsync(userId, cancellationToken);
+            if (!isAdmin)
+            {
+                await _telegramBotService.SendMessageAsync(chatId, "❌ Access denied.", cancellationToken);
+                return;
+            }
+
+            // Start the workflow - ask for coupon code
+            var promptMsg = await _localizationService.GetStringAsync("coupon.create.enter_code", cancellationToken);
+            await _telegramBotService.SendMessageAsync(chatId, promptMsg, cancellationToken);
+
+            // Set state
+            await _userStateRepository.SetStateAsync(
+                userId,
+                UserStateType.CreatingCouponCode,
+                "admin", // Mark as admin coupon
+                10, // 10 minutes timeout
+                cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            await _telegramBotService.SendMessageAsync(chatId, $"❌ Error: {ex.Message}", cancellationToken);
+        }
+    }
 }

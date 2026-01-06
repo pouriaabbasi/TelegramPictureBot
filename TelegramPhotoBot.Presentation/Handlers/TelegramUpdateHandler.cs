@@ -688,6 +688,10 @@ public partial class TelegramUpdateHandler
                     {
                         await HandleAdminCouponDeactivateAsync(user.Id, adminDeactivateCouponId, chatId, cancellationToken);
                     }
+                    else if (parts.Length > 3 && thirdPart == "create" && parts[3] == "start")
+                    {
+                        await HandleAdminCreateCouponStartAsync(user.Id, chatId, cancellationToken);
+                    }
                 }
                 break;
 
@@ -752,6 +756,41 @@ public partial class TelegramUpdateHandler
                 else if (secondPart == "deactivate" && Guid.TryParse(thirdPart, out var deactivateCouponId))
                 {
                     await HandleCouponDeactivateAsync(user.Id, deactivateCouponId, chatId, cancellationToken);
+                }
+                else if (secondPart == "create" && thirdPart == "start")
+                {
+                    await HandleModelCreateCouponStartAsync(user.Id, chatId, cancellationToken);
+                }
+                else if (secondPart == "create")
+                {
+                    // Handle coupon creation workflow buttons
+                    if (thirdPart == "usage" && parts.Length > 3)
+                    {
+                        // coupon_create_usage_content or coupon_create_usage_subscription
+                        var usageType = parts[3] == "content" ? CouponUsageType.ContentPurchase : CouponUsageType.SubscriptionPurchase;
+                        var userState = await _userStateRepository.GetActiveStateAsync(user.Id, cancellationToken);
+                        await HandleCreatingCouponUsageTypeSelectionAsync(user.Id, chatId, userState?.StateData, usageType, cancellationToken);
+                    }
+                    else if (thirdPart == "skip" && parts.Length > 4)
+                    {
+                        var userState = await _userStateRepository.GetActiveStateAsync(user.Id, cancellationToken);
+                        if (parts[3] == "valid" && parts[4] == "from")
+                        {
+                            // coupon_create_skip_valid_from
+                            await HandleCreatingCouponValidFromInputAsync(user.Id, chatId, userState?.StateData, null, cancellationToken);
+                        }
+                        else if (parts[3] == "valid" && parts[4] == "to")
+                        {
+                            // coupon_create_skip_valid_to
+                            await HandleCreatingCouponValidToInputAsync(user.Id, chatId, userState?.StateData, null, cancellationToken);
+                        }
+                    }
+                    else if (thirdPart == "unlimited" && parts.Length > 3 && parts[3] == "uses")
+                    {
+                        // coupon_create_unlimited_uses
+                        var userState = await _userStateRepository.GetActiveStateAsync(user.Id, cancellationToken);
+                        await HandleCreatingCouponMaxUsesInputAsync(user.Id, chatId, userState?.StateData, null, cancellationToken);
+                    }
                 }
                 break;
 
@@ -856,6 +895,26 @@ public partial class TelegramUpdateHandler
                     {
                         await HandleCouponInputForSubscriptionAsync(userId, message.Text.Trim(), couponModelId, chatId, cancellationToken);
                     }
+                    break;
+
+                case Domain.Enums.UserStateType.CreatingCouponCode:
+                    await HandleCreatingCouponCodeInputAsync(userId, chatId, userState.StateData, message.Text, cancellationToken);
+                    break;
+
+                case Domain.Enums.UserStateType.CreatingCouponDiscount:
+                    await HandleCreatingCouponDiscountInputAsync(userId, chatId, userState.StateData, message.Text, cancellationToken);
+                    break;
+
+                case Domain.Enums.UserStateType.CreatingCouponValidFrom:
+                    await HandleCreatingCouponValidFromInputAsync(userId, chatId, userState.StateData, message.Text, cancellationToken);
+                    break;
+
+                case Domain.Enums.UserStateType.CreatingCouponValidTo:
+                    await HandleCreatingCouponValidToInputAsync(userId, chatId, userState.StateData, message.Text, cancellationToken);
+                    break;
+
+                case Domain.Enums.UserStateType.CreatingCouponMaxUses:
+                    await HandleCreatingCouponMaxUsesInputAsync(userId, chatId, userState.StateData, message.Text, cancellationToken);
                     break;
 
                 default:

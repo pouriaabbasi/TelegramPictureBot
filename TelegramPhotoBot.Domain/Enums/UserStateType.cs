@@ -71,33 +71,43 @@ public enum UserStateType
     SettingModelAlias = 12,
     
     /// <summary>
-    /// Model creating coupon - entering code
+    /// Creating coupon - entering code
     /// </summary>
     CreatingCouponCode = 13,
     
     /// <summary>
-    /// Model creating coupon - entering discount percentage
+    /// Creating coupon - entering discount percentage
     /// </summary>
     CreatingCouponDiscount = 14,
     
     /// <summary>
-    /// Model creating coupon - entering expiry days
+    /// Creating coupon - selecting usage type (Content/Subscription)
     /// </summary>
-    CreatingCouponExpiry = 15,
+    CreatingCouponUsageType = 15,
     
     /// <summary>
-    /// Model creating coupon - entering max uses
+    /// Creating coupon - entering valid from date (optional)
     /// </summary>
-    CreatingCouponMaxUses = 16,
+    CreatingCouponValidFrom = 16,
+    
+    /// <summary>
+    /// Creating coupon - entering valid to date (optional)
+    /// </summary>
+    CreatingCouponValidTo = 17,
+    
+    /// <summary>
+    /// Creating coupon - entering max uses (optional)
+    /// </summary>
+    CreatingCouponMaxUses = 18,
     
     /// <summary>
     /// User entering coupon code for photo purchase
     /// </summary>
-    EnteringCouponForPhoto = 17,
+    EnteringCouponForPhoto = 19,
     
     /// <summary>
     /// User entering coupon code for subscription purchase
     /// </summary>
-    EnteringCouponForSubscription = 18
+    EnteringCouponForSubscription = 20
 }
 

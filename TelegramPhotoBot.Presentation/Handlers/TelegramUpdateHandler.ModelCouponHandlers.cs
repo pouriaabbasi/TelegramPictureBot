@@ -302,4 +302,46 @@ public partial class TelegramUpdateHandler
             await _telegramBotService.SendMessageAsync(chatId, $"❌ Error: {ex.Message}", cancellationToken);
         }
     }
+
+    /// <summary>
+    /// Starts the coupon creation workflow for models
+    /// </summary>
+    private async Task HandleModelCreateCouponStartAsync(Guid userId, long chatId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var model = await _modelService.GetModelByUserIdAsync(userId, cancellationToken);
+            if (model == null)
+            {
+                await _telegramBotService.SendMessageAsync(chatId, "❌ Model not found.", cancellationToken);
+                return;
+            }
+
+            // Check if model can create more coupons
+            var canCreate = await _couponService.CanModelCreateCouponAsync(model.Id, cancellationToken);
+            if (!canCreate)
+            {
+                var limitMsg = await _localizationService.GetStringAsync("coupon.error.model_coupon_limit_reached", 5, cancellationToken);
+                await _telegramBotService.SendMessageAsync(chatId, limitMsg, cancellationToken);
+                return;
+            }
+
+            // Start the workflow - ask for coupon code
+            var promptMsg = await _localizationService.GetStringAsync("coupon.create.enter_code", cancellationToken);
+            await _telegramBotService.SendMessageAsync(chatId, promptMsg, cancellationToken);
+
+            // Set state
+            await _userStateRepository.SetStateAsync(
+                userId,
+                UserStateType.CreatingCouponCode,
+                $"model_{model.Id}",
+                10, // 10 minutes timeout
+                cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            await _telegramBotService.SendMessageAsync(chatId, $"❌ Error: {ex.Message}", cancellationToken);
+        }
+    }
 }

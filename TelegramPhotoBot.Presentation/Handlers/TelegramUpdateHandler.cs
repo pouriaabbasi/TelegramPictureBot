@@ -1235,6 +1235,19 @@ public partial class TelegramUpdateHandler
                 return;
             }
 
+            // Check if there's a coupon applied (state data format: coupon_{couponId}_{photoId}_{finalPrice})
+            var userState = await _userStateRepository.GetActiveStateAsync(userId, cancellationToken);
+            long finalPrice = (long)photo.Price.Amount;
+            
+            if (userState != null && !string.IsNullOrWhiteSpace(userState.StateData) && userState.StateData.StartsWith("coupon_"))
+            {
+                var parts = userState.StateData.Split('_');
+                if (parts.Length >= 4 && long.TryParse(parts[3], out var couponFinalPrice))
+                {
+                    finalPrice = couponFinalPrice;
+                }
+            }
+
             // Create invoice for payment
             var invoiceRequest = new Application.DTOs.CreateInvoiceRequest
             {
@@ -1244,10 +1257,10 @@ public partial class TelegramUpdateHandler
                 Payload = $"photo_{photo.Id}_{userId}",
                 ProviderToken = "", // Empty for Telegram Stars
                 Currency = "XTR", // Telegram Stars currency
-                Amount = photo.Price.Amount,
+                Amount = finalPrice,
                 Prices = new Dictionary<string, string>
                 {
-                    { "Photo", photo.Price.Amount.ToString() }
+                    { "Photo", finalPrice.ToString() }
                 }
             };
 
@@ -1284,7 +1297,18 @@ public partial class TelegramUpdateHandler
                 return;
             }
 
-            var requiredStars = photo.Price.Amount;
+            // Check if there's a coupon applied (state data format: coupon_{couponId}_{photoId}_{finalPrice})
+            var userState = await _userStateRepository.GetActiveStateAsync(userId, cancellationToken);
+            long requiredStars = (long)photo.Price.Amount;
+            
+            if (userState != null && !string.IsNullOrWhiteSpace(userState.StateData) && userState.StateData.StartsWith("coupon_"))
+            {
+                var parts = userState.StateData.Split('_');
+                if (parts.Length >= 4 && long.TryParse(parts[3], out var couponFinalPrice))
+                {
+                    requiredStars = couponFinalPrice;
+                }
+            }
             
             // Send payment instructions message
             var instructionsText = await _localizationService.GetStringAsync("payment.star_instructions", cancellationToken);
@@ -3473,6 +3497,19 @@ public partial class TelegramUpdateHandler
                 ? model.Alias 
                 : model.DisplayName;
 
+            // Check if there's a coupon applied (state data format: coupon_{couponId}_{modelId}_{finalPrice})
+            var userState = await _userStateRepository.GetActiveStateAsync(userId, cancellationToken);
+            long finalPrice = model.SubscriptionPrice?.Amount ?? 0;
+            
+            if (userState != null && !string.IsNullOrWhiteSpace(userState.StateData) && userState.StateData.StartsWith("coupon_"))
+            {
+                var parts = userState.StateData.Split('_');
+                if (parts.Length >= 4 && long.TryParse(parts[3], out var couponFinalPrice))
+                {
+                    finalPrice = couponFinalPrice;
+                }
+            }
+
             // Show payment invoice
             var invoiceRequest = new Application.DTOs.CreateInvoiceRequest
             {
@@ -3482,10 +3519,10 @@ public partial class TelegramUpdateHandler
                 Payload = $"subscription_{model.Id}_{userId}",
                 ProviderToken = "", // Empty for Telegram Stars
                 Currency = "XTR", // Telegram Stars currency
-                Amount = model.SubscriptionPrice?.Amount ?? 0,
+                Amount = finalPrice,
                 Prices = new Dictionary<string, string>
                 {
-                    { "Subscription", (model.SubscriptionPrice?.Amount ?? 0).ToString() }
+                    { "Subscription", finalPrice.ToString() }
                 }
             };
 
@@ -3518,7 +3555,18 @@ public partial class TelegramUpdateHandler
                 return;
             }
 
-            var requiredStars = model.SubscriptionPrice?.Amount ?? 0;
+            // Check if there's a coupon applied (state data format: coupon_{couponId}_{modelId}_{finalPrice})
+            var userState = await _userStateRepository.GetActiveStateAsync(userId, cancellationToken);
+            long requiredStars = model.SubscriptionPrice?.Amount ?? 0;
+            
+            if (userState != null && !string.IsNullOrWhiteSpace(userState.StateData) && userState.StateData.StartsWith("coupon_"))
+            {
+                var parts = userState.StateData.Split('_');
+                if (parts.Length >= 4 && long.TryParse(parts[3], out var couponFinalPrice))
+                {
+                    requiredStars = couponFinalPrice;
+                }
+            }
             
             // Send payment instructions message
             var instructionsText = await _localizationService.GetStringAsync("payment.star_instructions", cancellationToken);

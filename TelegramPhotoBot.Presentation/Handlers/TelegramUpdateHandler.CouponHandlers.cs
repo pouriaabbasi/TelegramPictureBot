@@ -1,6 +1,7 @@
 using Telegram.Bot.Types;
 using TelegramPhotoBot.Application.DTOs;
 using TelegramPhotoBot.Domain.Enums;
+using TelegramPhotoBot.Domain.ValueObjects;
 
 namespace TelegramPhotoBot.Presentation.Handlers;
 
@@ -165,11 +166,39 @@ public partial class TelegramUpdateHandler
             await _userStateRepository.ClearStateAsync(userId, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-            // Store coupon ID in state for use in payment
+            // Check if final price is 0 (100% discount)
+            if (couponResult.FinalPriceStars == 0)
+            {
+                // Record coupon usage
+                await _couponService.RecordCouponUsageAsync(
+                    couponResult.Coupon.Id,
+                    userId,
+                    couponRequest.OriginalPriceStars,
+                    couponResult.DiscountAmountStars,
+                    couponResult.FinalPriceStars,
+                    photoId,
+                    photo.ModelId,
+                    cancellationToken);
+
+                // Grant access immediately (free with 100% coupon)
+                var freeMsg = await _localizationService.GetStringAsync("coupon.free_content", cancellationToken);
+                await _telegramBotService.SendMessageAsync(chatId, freeMsg, cancellationToken);
+
+                // Deliver the content
+                await _contentDeliveryService.SendPhotoAsync(new SendPhotoRequest
+                {
+                    RecipientTelegramUserId = (await _userRepository.GetByIdAsync(userId, cancellationToken))!.TelegramUserId,
+                    PhotoId = photoId
+                }, cancellationToken);
+
+                return;
+            }
+
+            // Store coupon ID and final price in state for use in payment
             await _userStateRepository.SetStateAsync(
                 userId,
                 UserStateType.None,
-                $"coupon_{couponResult.Coupon.Id}_{photoId}",
+                $"coupon_{couponResult.Coupon.Id}_{photoId}_{couponResult.FinalPriceStars}",
                 10, // 10 minutes
                 cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -254,11 +283,39 @@ public partial class TelegramUpdateHandler
             await _userStateRepository.ClearStateAsync(userId, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-            // Store coupon ID in state for use in payment
+            // Check if final price is 0 (100% discount)
+            if (couponResult.FinalPriceStars == 0)
+            {
+                // Record coupon usage
+                await _couponService.RecordCouponUsageAsync(
+                    couponResult.Coupon.Id,
+                    userId,
+                    couponRequest.OriginalPriceStars,
+                    couponResult.DiscountAmountStars,
+                    couponResult.FinalPriceStars,
+                    null,  // No photoId for subscription
+                    modelId,
+                    cancellationToken);
+
+                // Grant subscription immediately (free with 100% coupon)
+                var subscriptionResult = await _modelSubscriptionService.CreateSubscriptionAsync(
+                    userId,
+                    modelId,
+                    new TelegramStars(0),  // Free with coupon
+                    cancellationToken);
+                
+                var freeMsg = await _localizationService.GetStringAsync("coupon.free_subscription", cancellationToken);
+                var successMsg = string.Format(freeMsg, model.Alias ?? model.DisplayName, model.SubscriptionDurationDays);
+                await _telegramBotService.SendMessageAsync(chatId, successMsg, cancellationToken);
+
+                return;
+            }
+
+            // Store coupon ID and final price in state for use in payment
             await _userStateRepository.SetStateAsync(
                 userId,
                 UserStateType.None,
-                $"coupon_{couponResult.Coupon.Id}_{modelId}",
+                $"coupon_{couponResult.Coupon.Id}_{modelId}_{couponResult.FinalPriceStars}",
                 10, // 10 minutes
                 cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);

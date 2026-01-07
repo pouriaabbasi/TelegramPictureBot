@@ -1401,6 +1401,20 @@ Date: 2025-01-01" }
                 "🎫 Discount ({1}%): {2} ⭐️\n" +
                 "💳 Final price: {3} ⭐️" }
         },
+        ["coupon.free_content"] = new()
+        {
+            { BotLanguage.Persian, "🎉 با کوپن 100% تخفیف، این محتوا برای شما رایگان است!\n\n" +
+                "محتوا در حال ارسال است..." },
+            { BotLanguage.English, "🎉 With 100% discount coupon, this content is free for you!\n\n" +
+                "Sending content..." }
+        },
+        ["coupon.free_subscription"] = new()
+        {
+            { BotLanguage.Persian, "🎉 با کوپن 100% تخفیف، اشتراک {0} برای شما رایگان است!\n\n" +
+                "✅ اشتراک شما برای {1} روز فعال شد." },
+            { BotLanguage.English, "🎉 With 100% discount coupon, subscription to {0} is free for you!\n\n" +
+                "✅ Your subscription has been activated for {1} days." }
+        },
         ["coupon.error.not_found"] = new()
         {
             { BotLanguage.Persian, "❌ کوپن وارد شده یافت نشد." },

@@ -320,6 +320,30 @@ public partial class TelegramUpdateHandler
         if (message.Text?.Equals("/start", StringComparison.OrdinalIgnoreCase) == true)
         {
             Console.WriteLine($"🚀 Handling /start command for user {user.Id}");
+            
+            // Clear any active state when user sends /start
+            // This allows them to cancel any ongoing workflow
+            try
+            {
+                var existingState = await _userStateRepository.GetActiveStateAsync(user.Id, cancellationToken);
+                if (existingState != null)
+                {
+                    Console.WriteLine($"🧹 Clearing existing state: {existingState.StateType} for user {user.Id}");
+                    await _userStateRepository.ClearStateAsync(user.Id, cancellationToken);
+                    await _unitOfWork.SaveChangesAsync(cancellationToken);
+                    Console.WriteLine($"✅ State cleared successfully");
+                    
+                    // Notify user that their previous operation was cancelled
+                    var cancelMsg = await _localizationService.GetStringAsync("common.workflow_cancelled", cancellationToken);
+                    await _telegramBotService.SendMessageAsync(message.ChatId, cancelMsg, cancellationToken);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"⚠️ Failed to clear state: {ex.Message}");
+                // Non-critical, continue to show main menu
+            }
+            
             await ShowMainMenuAsync(user.Id, message.ChatId, cancellationToken);
             Console.WriteLine($"✅ /start command completed");
             return;

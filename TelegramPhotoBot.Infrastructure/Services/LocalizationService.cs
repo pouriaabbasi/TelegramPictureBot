@@ -75,6 +75,11 @@ public class LocalizationService : ILocalizationService
             { BotLanguage.Persian, "❌ خطا در پردازش درخواست شما. لطفاً دوباره تلاش کنید." },
             { BotLanguage.English, "❌ Error processing your request. Please try again." }
         },
+        ["common.workflow_cancelled"] = new()
+        {
+            { BotLanguage.Persian, "🔄 عملیات قبلی لغو شد.\n\nبه منوی اصلی برگشتید." },
+            { BotLanguage.English, "🔄 Previous operation cancelled.\n\nReturned to main menu." }
+        },
         ["common.not_found"] = new()
         {
             { BotLanguage.Persian, "❌ مورد یافت نشد." },

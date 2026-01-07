@@ -23,6 +23,7 @@ public class ApplyCouponResult
 {
     public bool IsValid { get; set; }
     public string? ErrorMessageKey { get; set; }
+    public string? ErrorMessage { get; set; }
     public Coupon? Coupon { get; set; }
     public int DiscountAmountStars { get; set; }
     public int FinalPriceStars { get; set; }

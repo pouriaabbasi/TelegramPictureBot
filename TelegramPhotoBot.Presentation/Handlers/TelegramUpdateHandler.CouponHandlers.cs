@@ -131,8 +131,7 @@ public partial class TelegramUpdateHandler
             if (!couponResult.IsValid)
             {
                 // Show error message
-                var errorMsg = await _localizationService.GetStringAsync(couponResult.ErrorMessageKey!, cancellationToken);
-                await _telegramBotService.SendMessageAsync(chatId, errorMsg, cancellationToken);
+                await _telegramBotService.SendMessageAsync(chatId, couponResult.ErrorMessage!, cancellationToken);
                 
                 // Ask if they want to try again or skip
                 var tryAgainMsg = await _localizationService.GetStringAsync("coupon.enter_code", cancellationToken);
@@ -214,8 +213,7 @@ public partial class TelegramUpdateHandler
             if (!couponResult.IsValid)
             {
                 // Show error message
-                var errorMsg = await _localizationService.GetStringAsync(couponResult.ErrorMessageKey!, cancellationToken);
-                await _telegramBotService.SendMessageAsync(chatId, errorMsg, cancellationToken);
+                await _telegramBotService.SendMessageAsync(chatId, couponResult.ErrorMessage!, cancellationToken);
                 
                 // Ask if they want to try again or skip
                 var tryAgainMsg = await _localizationService.GetStringAsync("coupon.enter_code", cancellationToken);

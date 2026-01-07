@@ -11,117 +11,149 @@ public class CouponService : ICouponService
     private readonly ICouponRepository _couponRepository;
     private readonly ICouponUsageRepository _couponUsageRepository;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly ILocalizationService _localizationService;
     private const int MAX_MODEL_ACTIVE_COUPONS = 5;
 
     public CouponService(
         ICouponRepository couponRepository,
         ICouponUsageRepository couponUsageRepository,
-        IUnitOfWork unitOfWork)
+        IUnitOfWork unitOfWork,
+        ILocalizationService localizationService)
     {
         _couponRepository = couponRepository;
         _couponUsageRepository = couponUsageRepository;
         _unitOfWork = unitOfWork;
+        _localizationService = localizationService;
     }
 
     public async Task<ApplyCouponResult> ValidateAndApplyCouponAsync(
         ApplyCouponRequest request, 
         CancellationToken cancellationToken = default)
     {
-        // Get coupon by code
-        var coupon = await _couponRepository.GetByCodeAsync(request.CouponCode, cancellationToken);
-        
-        if (coupon == null)
+        try
         {
-            return new ApplyCouponResult
+            // Get coupon by code
+            var coupon = await _couponRepository.GetByCodeAsync(request.CouponCode, cancellationToken);
+            
+            if (coupon == null)
             {
-                IsValid = false,
-                ErrorMessageKey = "coupon.error.not_found"
-            };
-        }
+                var errorMsg = await _localizationService.GetStringAsync("coupon.error.not_found", cancellationToken);
+                return new ApplyCouponResult
+                {
+                    IsValid = false,
+                    ErrorMessageKey = "coupon.error.not_found",
+                    ErrorMessage = errorMsg
+                };
+            }
 
-        // Check if coupon is valid for use (active, not expired, usage limit)
-        if (!coupon.IsValidForUse(DateTime.UtcNow))
-        {
-            return new ApplyCouponResult
+            // Check if coupon is valid for use (active, not expired, usage limit)
+            if (!coupon.IsValidForUse(DateTime.UtcNow))
             {
-                IsValid = false,
-                ErrorMessageKey = "coupon.error.invalid"
-            };
-        }
+                var errorMsg = await _localizationService.GetStringAsync("coupon.error.invalid", cancellationToken);
+                return new ApplyCouponResult
+                {
+                    IsValid = false,
+                    ErrorMessageKey = "coupon.error.invalid",
+                    ErrorMessage = errorMsg
+                };
+            }
 
-        // Check if user has already used this coupon
-        var hasUsed = await _couponUsageRepository.HasUserUsedCouponAsync(
-            request.UserId, 
-            coupon.Id, 
-            cancellationToken);
-        
-        if (hasUsed)
-        {
-            return new ApplyCouponResult
+            // Check if user has already used this coupon
+            var hasUsed = await _couponUsageRepository.HasUserUsedCouponAsync(
+                request.UserId, 
+                coupon.Id, 
+                cancellationToken);
+            
+            if (hasUsed)
             {
-                IsValid = false,
-                ErrorMessageKey = "coupon.error.already_used"
-            };
-        }
+                var errorMsg = await _localizationService.GetStringAsync("coupon.error.already_used", cancellationToken);
+                return new ApplyCouponResult
+                {
+                    IsValid = false,
+                    ErrorMessageKey = "coupon.error.already_used",
+                    ErrorMessage = errorMsg
+                };
+            }
 
-        // Check if coupon usage type matches
-        if (coupon.UsageType != request.UsageType)
-        {
-            return new ApplyCouponResult
+            // Check if coupon usage type matches
+            if (coupon.UsageType != request.UsageType)
             {
-                IsValid = false,
-                ErrorMessageKey = request.UsageType == CouponUsageType.ContentPurchase 
+                var errorKey = request.UsageType == CouponUsageType.ContentPurchase 
                     ? "coupon.error.subscription_only"
-                    : "coupon.error.content_only"
+                    : "coupon.error.content_only";
+                var errorMsg = await _localizationService.GetStringAsync(errorKey, cancellationToken);
+                return new ApplyCouponResult
+                {
+                    IsValid = false,
+                    ErrorMessageKey = errorKey,
+                    ErrorMessage = errorMsg
+                };
+            }
+
+            // For model-owned coupons, verify it applies to the correct model
+            if (coupon.OwnerType == CouponOwnerType.Model)
+            {
+                if (request.UsageType == CouponUsageType.SubscriptionPurchase)
+                {
+                    // For subscriptions, ModelId should match
+                    if (coupon.ModelId != request.ModelId)
+                    {
+                        var errorMsg = await _localizationService.GetStringAsync("coupon.error.wrong_model", cancellationToken);
+                        return new ApplyCouponResult
+                        {
+                            IsValid = false,
+                            ErrorMessageKey = "coupon.error.wrong_model",
+                            ErrorMessage = errorMsg
+                        };
+                    }
+                }
+                else if (request.UsageType == CouponUsageType.ContentPurchase)
+                {
+                    // For content purchases, verify the photo belongs to the model
+                    // We'll need to check this at the handler level where we have photo info
+                    // For now, we'll pass the ModelId from the photo
+                    if (coupon.ModelId != request.ModelId)
+                    {
+                        var errorMsg = await _localizationService.GetStringAsync("coupon.error.wrong_model", cancellationToken);
+                        return new ApplyCouponResult
+                        {
+                            IsValid = false,
+                            ErrorMessageKey = "coupon.error.wrong_model",
+                            ErrorMessage = errorMsg
+                        };
+                    }
+                }
+            }
+
+            // Calculate discount (50/50 split between model and platform)
+            var discountAmount = (request.OriginalPriceStars * coupon.DiscountPercentage) / 100;
+            var finalPrice = request.OriginalPriceStars - discountAmount;
+            var modelShare = discountAmount / 2;
+            var platformShare = discountAmount - modelShare; // Handle odd numbers
+
+            return new ApplyCouponResult
+            {
+                IsValid = true,
+                Coupon = coupon,
+                DiscountAmountStars = discountAmount,
+                FinalPriceStars = finalPrice,
+                ModelShareStars = modelShare,
+                PlatformShareStars = platformShare
             };
         }
-
-        // For model-owned coupons, verify it applies to the correct model
-        if (coupon.OwnerType == CouponOwnerType.Model)
+        catch (Exception ex)
         {
-            if (request.UsageType == CouponUsageType.SubscriptionPurchase)
+            Console.WriteLine($"[CouponService] Error in ValidateAndApplyCouponAsync: {ex.Message}");
+            Console.WriteLine($"[CouponService] Stack trace: {ex.StackTrace}");
+            
+            var errorMsg = await _localizationService.GetStringAsync("common.error", cancellationToken);
+            return new ApplyCouponResult
             {
-                // For subscriptions, ModelId should match
-                if (coupon.ModelId != request.ModelId)
-                {
-                    return new ApplyCouponResult
-                    {
-                        IsValid = false,
-                        ErrorMessageKey = "coupon.error.wrong_model"
-                    };
-                }
-            }
-            else if (request.UsageType == CouponUsageType.ContentPurchase)
-            {
-                // For content purchases, verify the photo belongs to the model
-                // We'll need to check this at the handler level where we have photo info
-                // For now, we'll pass the ModelId from the photo
-                if (coupon.ModelId != request.ModelId)
-                {
-                    return new ApplyCouponResult
-                    {
-                        IsValid = false,
-                        ErrorMessageKey = "coupon.error.wrong_model"
-                    };
-                }
-            }
+                IsValid = false,
+                ErrorMessageKey = "common.error",
+                ErrorMessage = errorMsg
+            };
         }
-
-        // Calculate discount (50/50 split between model and platform)
-        var discountAmount = (request.OriginalPriceStars * coupon.DiscountPercentage) / 100;
-        var finalPrice = request.OriginalPriceStars - discountAmount;
-        var modelShare = discountAmount / 2;
-        var platformShare = discountAmount - modelShare; // Handle odd numbers
-
-        return new ApplyCouponResult
-        {
-            IsValid = true,
-            Coupon = coupon,
-            DiscountAmountStars = discountAmount,
-            FinalPriceStars = finalPrice,
-            ModelShareStars = modelShare,
-            PlatformShareStars = platformShare
-        };
     }
 
     public async Task<Coupon> CreateCouponAsync(
@@ -172,27 +204,36 @@ public class CouponService : ICouponService
         Guid? modelId = null,
         CancellationToken cancellationToken = default)
     {
-        var usage = new CouponUsage(
-            couponId,
-            userId,
-            originalPriceStars,
-            discountAmountStars,
-            finalPriceStars,
-            photoId,
-            modelId
-        );
-
-        await _couponUsageRepository.AddAsync(usage, cancellationToken);
-
-        // Increment coupon usage count
-        var coupon = await _couponRepository.GetByIdAsync(couponId, cancellationToken);
-        if (coupon != null)
+        try
         {
-            coupon.IncrementUsage();
-            await _couponRepository.UpdateAsync(coupon, cancellationToken);
-        }
+            var usage = new CouponUsage(
+                couponId,
+                userId,
+                originalPriceStars,
+                discountAmountStars,
+                finalPriceStars,
+                photoId,
+                modelId
+            );
 
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
+            await _couponUsageRepository.AddAsync(usage, cancellationToken);
+
+            // Increment coupon usage count
+            var coupon = await _couponRepository.GetByIdAsync(couponId, cancellationToken);
+            if (coupon != null)
+            {
+                coupon.IncrementUsage();
+                await _couponRepository.UpdateAsync(coupon, cancellationToken);
+            }
+
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[CouponService] Error in RecordCouponUsageAsync: {ex.Message}");
+            Console.WriteLine($"[CouponService] Stack trace: {ex.StackTrace}");
+            throw;
+        }
     }
 
     public async Task<IEnumerable<CouponDto>> GetModelCouponsAsync(

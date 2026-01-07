@@ -154,9 +154,10 @@ public partial class TelegramUpdateHandler
             // Coupon valid! Store it temporarily and show payment method selection
             var appliedMsg = await _localizationService.GetStringAsync("coupon.applied", cancellationToken);
             var message = string.Format(appliedMsg, 
-                couponResult.Coupon!.DiscountPercentage,
-                couponResult.DiscountAmountStars,
-                couponResult.FinalPriceStars);
+                couponRequest.OriginalPriceStars,  // {0}: قیمت اصلی
+                couponResult.Coupon!.DiscountPercentage,  // {1}: درصد تخفیف
+                couponResult.DiscountAmountStars,  // {2}: مقدار تخفیف
+                couponResult.FinalPriceStars);  // {3}: قیمت نهایی
 
             await _telegramBotService.SendMessageAsync(chatId, message, cancellationToken);
 
@@ -188,11 +189,14 @@ public partial class TelegramUpdateHandler
     /// </summary>
     private async Task HandleCouponInputForSubscriptionAsync(Guid userId, string couponCode, Guid modelId, long chatId, CancellationToken cancellationToken)
     {
+        Console.WriteLine($"[DEBUG] HandleCouponInputForSubscriptionAsync called. UserId: {userId}, CouponCode: {couponCode}, ModelId: {modelId}");
         try
         {
             var model = await _modelRepository.GetByIdAsync(modelId, cancellationToken);
+            Console.WriteLine($"[DEBUG] Model retrieved: {model?.Id}, CanAcceptSubscriptions: {model?.CanAcceptSubscriptions()}");
             if (model == null || !model.CanAcceptSubscriptions())
             {
+                Console.WriteLine($"[DEBUG] Model validation failed. Sending error message.");
                 await _telegramBotService.SendMessageAsync(chatId, "❌ Model not available for subscriptions.", cancellationToken);
                 return;
             }
@@ -208,10 +212,13 @@ public partial class TelegramUpdateHandler
                 ModelId = modelId
             };
 
+            Console.WriteLine($"[DEBUG] Calling ValidateAndApplyCouponAsync. OriginalPrice: {couponRequest.OriginalPriceStars}");
             var couponResult = await _couponService.ValidateAndApplyCouponAsync(couponRequest, cancellationToken);
+            Console.WriteLine($"[DEBUG] Coupon validation result: IsValid={couponResult.IsValid}, ErrorMessage={couponResult.ErrorMessage}");
 
             if (!couponResult.IsValid)
             {
+                Console.WriteLine($"[DEBUG] Coupon is invalid. Sending error message to user.");
                 // Show error message
                 await _telegramBotService.SendMessageAsync(chatId, couponResult.ErrorMessage!, cancellationToken);
                 
@@ -236,9 +243,10 @@ public partial class TelegramUpdateHandler
             // Coupon valid! Store it temporarily and show payment method selection
             var appliedMsg = await _localizationService.GetStringAsync("coupon.applied", cancellationToken);
             var message = string.Format(appliedMsg,
-                couponResult.DiscountAmountStars,
-                couponResult.Coupon!.DiscountPercentage,
-                couponResult.FinalPriceStars);
+                couponRequest.OriginalPriceStars,  // {0}: قیمت اصلی
+                couponResult.Coupon!.DiscountPercentage,  // {1}: درصد تخفیف
+                couponResult.DiscountAmountStars,  // {2}: مقدار تخفیف
+                couponResult.FinalPriceStars);  // {3}: قیمت نهایی
 
             await _telegramBotService.SendMessageAsync(chatId, message, cancellationToken);
 
@@ -260,6 +268,8 @@ public partial class TelegramUpdateHandler
         }
         catch (Exception ex)
         {
+            Console.WriteLine($"[DEBUG] Exception in HandleCouponInputForSubscriptionAsync: {ex.Message}");
+            Console.WriteLine($"[DEBUG] StackTrace: {ex.StackTrace}");
             var errorMsg = await _localizationService.GetStringAsync("common.error", cancellationToken);
             await _telegramBotService.SendMessageAsync(chatId, errorMsg, cancellationToken);
         }

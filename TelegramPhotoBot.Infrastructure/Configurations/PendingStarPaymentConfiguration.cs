@@ -52,10 +52,12 @@ public class PendingStarPaymentConfiguration : IEntityTypeConfiguration<PendingS
             .HasForeignKey(p => p.UserId)
             .OnDelete(DeleteBehavior.Restrict);
 
+        // Optional Photo relationship (only for Photo purchases, not for Subscriptions)
         builder.HasOne(p => p.Photo)
             .WithMany()
             .HasForeignKey(p => p.ContentId)
-            .OnDelete(DeleteBehavior.Restrict);
+            .OnDelete(DeleteBehavior.Restrict)
+            .IsRequired(false);  // Make it optional
 
         // Indexes for performance
         builder.HasIndex(p => new { p.PaymentMessageId, p.ChatId })

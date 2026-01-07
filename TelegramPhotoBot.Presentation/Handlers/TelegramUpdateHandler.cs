@@ -46,6 +46,7 @@ public partial class TelegramUpdateHandler
     private readonly INotificationService _notificationService;
     private readonly ICouponService _couponService;
     private readonly ICouponRepository _couponRepository;
+    private readonly IPendingStarPaymentRepository _pendingStarPaymentRepository;
 
     public TelegramUpdateHandler(
         IUserService userService,
@@ -76,7 +77,8 @@ public partial class TelegramUpdateHandler
         ILocalizationService localizationService,
         INotificationService notificationService,
         ICouponService couponService,
-        ICouponRepository couponRepository)
+        ICouponRepository couponRepository,
+        IPendingStarPaymentRepository pendingStarPaymentRepository)
     {
         _userService = userService ?? throw new ArgumentNullException(nameof(userService));
         _contentAuthorizationService = contentAuthorizationService ?? throw new ArgumentNullException(nameof(contentAuthorizationService));
@@ -107,6 +109,7 @@ public partial class TelegramUpdateHandler
         _notificationService = notificationService ?? throw new ArgumentNullException(nameof(notificationService));
         _couponService = couponService ?? throw new ArgumentNullException(nameof(couponService));
         _couponRepository = couponRepository ?? throw new ArgumentNullException(nameof(couponRepository));
+        _pendingStarPaymentRepository = pendingStarPaymentRepository ?? throw new ArgumentNullException(nameof(pendingStarPaymentRepository));
     }
 
     /// <summary>
@@ -557,31 +560,39 @@ public partial class TelegramUpdateHandler
                 
             case "pay":
                 // Handle payment method selection for subscriptions and photos
+                Console.WriteLine($"[DEBUG] Pay action received. Parts.Length: {parts.Length}");
                 if (parts.Length >= 4)
                 {
                     var paymentMethod = secondPart; // "invoice" or "star"
                     var paymentType = parts[2]; // "sub" for subscription, "photo" for photo
                     var idStr = parts[3];
+                    Console.WriteLine($"[DEBUG] PaymentMethod: {paymentMethod}, PaymentType: {paymentType}, IdStr: {idStr}");
                     
                     if (paymentType == "sub" && Guid.TryParse(idStr, out var modelId))
                     {
+                        Console.WriteLine($"[DEBUG] Subscription payment. ModelId: {modelId}");
                         if (paymentMethod == "invoice")
                         {
+                            Console.WriteLine($"[DEBUG] Calling HandleSubscriptionInvoicePaymentAsync");
                             await HandleSubscriptionInvoicePaymentAsync(user.Id, modelId, chatId, cancellationToken);
                         }
                         else if (paymentMethod == "star")
                         {
+                            Console.WriteLine($"[DEBUG] Calling HandleSubscriptionStarPaymentAsync");
                             await HandleSubscriptionStarPaymentAsync(user.Id, modelId, chatId, cancellationToken);
                         }
                     }
                     else if (paymentType == "photo" && Guid.TryParse(idStr, out var photoId))
                     {
+                        Console.WriteLine($"[DEBUG] Photo payment. PhotoId: {photoId}");
                         if (paymentMethod == "invoice")
                         {
+                            Console.WriteLine($"[DEBUG] Calling HandlePhotoInvoicePaymentAsync");
                             await HandlePhotoInvoicePaymentAsync(user.Id, photoId, chatId, cancellationToken);
                         }
                         else if (paymentMethod == "star")
                         {
+                            Console.WriteLine($"[DEBUG] Calling HandlePhotoStarPaymentAsync");
                             await HandlePhotoStarPaymentAsync(user.Id, photoId, chatId, cancellationToken);
                         }
                     }
@@ -3546,11 +3557,14 @@ public partial class TelegramUpdateHandler
     /// </summary>
     private async Task HandleSubscriptionStarPaymentAsync(Guid userId, Guid modelId, long chatId, CancellationToken cancellationToken)
     {
+        Console.WriteLine($"[DEBUG] HandleSubscriptionStarPaymentAsync called. UserId: {userId}, ModelId: {modelId}, ChatId: {chatId}");
         try
         {
             var model = await _modelService.GetModelByIdAsync(modelId, cancellationToken);
+            Console.WriteLine($"[DEBUG] Model retrieved: {model?.Id}, CanAcceptSubscriptions: {model?.CanAcceptSubscriptions()}");
             if (model == null || !model.CanAcceptSubscriptions())
             {
+                Console.WriteLine($"[DEBUG] Model validation failed. Sending error message.");
                 await _telegramBotService.SendMessageAsync(chatId, "❌ Model not available for subscriptions.", cancellationToken);
                 return;
             }
@@ -3558,22 +3572,28 @@ public partial class TelegramUpdateHandler
             // Check if there's a coupon applied (state data format: coupon_{couponId}_{modelId}_{finalPrice})
             var userState = await _userStateRepository.GetActiveStateAsync(userId, cancellationToken);
             long requiredStars = model.SubscriptionPrice?.Amount ?? 0;
+            Console.WriteLine($"[DEBUG] Original requiredStars: {requiredStars}");
             
             if (userState != null && !string.IsNullOrWhiteSpace(userState.StateData) && userState.StateData.StartsWith("coupon_"))
             {
+                Console.WriteLine($"[DEBUG] Found coupon state: {userState.StateData}");
                 var parts = userState.StateData.Split('_');
                 if (parts.Length >= 4 && long.TryParse(parts[3], out var couponFinalPrice))
                 {
                     requiredStars = couponFinalPrice;
+                    Console.WriteLine($"[DEBUG] Coupon applied. New requiredStars: {requiredStars}");
                 }
             }
             
             // Send payment instructions message
+            Console.WriteLine($"[DEBUG] Sending payment instructions for {requiredStars} stars");
             var instructionsText = await _localizationService.GetStringAsync("payment.star_instructions", cancellationToken);
             var progressBar = BuildProgressBar(0, (int)requiredStars);
             var message = string.Format(instructionsText, requiredStars, progressBar);
             
+            Console.WriteLine($"[DEBUG] Calling SendMessageWithReturnAsync");
             var sentMessage = await _telegramBotService.SendMessageWithReturnAsync(chatId, message, cancellationToken);
+            Console.WriteLine($"[DEBUG] Message sent. MessageId: {sentMessage.MessageId}");
             
             // Create pending payment record
             var pendingPayment = new PendingStarPayment(
@@ -3587,11 +3607,15 @@ public partial class TelegramUpdateHandler
                 DateTime.UtcNow.AddHours(24) // 24 hour expiration
             );
             
+            Console.WriteLine($"[DEBUG] Adding pending payment to repository");
             await _pendingStarPaymentRepository.AddAsync(pendingPayment, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
+            Console.WriteLine($"[DEBUG] Pending payment saved successfully");
         }
         catch (Exception ex)
         {
+            Console.WriteLine($"[ERROR] HandleSubscriptionStarPaymentAsync failed: {ex.Message}");
+            Console.WriteLine($"[ERROR] StackTrace: {ex.StackTrace}");
             var errorMsg = await _localizationService.GetStringAsync("common.error", cancellationToken);
             await _telegramBotService.SendMessageAsync(chatId, errorMsg, cancellationToken);
         }

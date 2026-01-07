@@ -74,6 +74,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IPendingStarPaymentRepository, PendingStarPaymentRepository>();
         services.AddScoped<ICouponRepository, CouponRepository>();
         services.AddScoped<ICouponUsageRepository, CouponUsageRepository>();
+        services.AddScoped<IPendingStarPaymentRepository, PendingStarPaymentRepository>();
 
         // Telegram Services - Bot Token MUST be in appsettings.json (required for bootstrapping)
         var botToken = configuration["Telegram:BotToken"] 

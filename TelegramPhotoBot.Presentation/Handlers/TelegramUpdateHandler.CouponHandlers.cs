@@ -304,8 +304,10 @@ public partial class TelegramUpdateHandler
                     new TelegramStars(0),  // Free with coupon
                     cancellationToken);
                 
-                var freeMsg = await _localizationService.GetStringAsync("coupon.free_subscription", cancellationToken);
-                var successMsg = string.Format(freeMsg, model.Alias ?? model.DisplayName, model.SubscriptionDurationDays);
+                var successMsg = await _localizationService.GetStringAsync(
+                    "coupon.free_subscription", 
+                    model.Alias ?? model.DisplayName, 
+                    model.SubscriptionDurationDays);
                 await _telegramBotService.SendMessageAsync(chatId, successMsg, cancellationToken);
 
                 return;

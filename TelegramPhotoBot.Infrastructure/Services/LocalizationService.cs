@@ -1511,7 +1511,166 @@ Date: 2025-01-01" }
             { BotLanguage.English, "❌ Coupon deactivated successfully." }
         },
         
-        // Create Coupon Flow
+        // Create Coupon Flow - Step by Step
+        ["coupon.create.enter_code"] = new()
+        {
+            { BotLanguage.Persian, "🎫 **مرحله 1: کد کوپن**\n\n" +
+                "یک کد یونیک برای کوپن خود وارد کنید.\n\n" +
+                "📝 مثال: WINTER50, NEWYEAR2025\n" +
+                "⚠️ فقط حروف انگلیسی و اعداد (بدون فاصله)\n" +
+                "📏 حداقل 3، حداکثر 20 کاراکتر" },
+            { BotLanguage.English, "🎫 **Step 1: Coupon Code**\n\n" +
+                "Enter a unique code for your coupon.\n\n" +
+                "📝 Example: WINTER50, NEWYEAR2025\n" +
+                "⚠️ Letters and numbers only (no spaces)\n" +
+                "📏 Min 3, Max 20 characters" }
+        },
+        ["coupon.create.enter_discount"] = new()
+        {
+            { BotLanguage.Persian, "📊 **مرحله 2: درصد تخفیف**\n\n" +
+                "درصد تخفیف را وارد کنید.\n\n" +
+                "📝 مثال: 20 (برای 20% تخفیف)\n" +
+                "📏 باید بین 1 تا 100 باشد" },
+            { BotLanguage.English, "📊 **Step 2: Discount Percentage**\n\n" +
+                "Enter the discount percentage.\n\n" +
+                "📝 Example: 20 (for 20% OFF)\n" +
+                "📏 Must be between 1 and 100" }
+        },
+        ["coupon.create.select_usage_type"] = new()
+        {
+            { BotLanguage.Persian, "🎯 **مرحله 3: نوع استفاده**\n\n" +
+                "این کوپن برای چه چیزی استفاده می‌شود؟\n\n" +
+                "• خرید محتوا: برای خرید عکس/ویدیوهای منفرد\n" +
+                "• خرید اشتراک: برای خرید اشتراک ماهانه مدل" },
+            { BotLanguage.English, "🎯 **Step 3: Usage Type**\n\n" +
+                "What can this coupon be used for?\n\n" +
+                "• Content Purchase: For buying individual photos/videos\n" +
+                "• Subscription Purchase: For buying monthly model subscription" }
+        },
+        ["coupon.create.enter_valid_from"] = new()
+        {
+            { BotLanguage.Persian, "📅 **مرحله 4: تاریخ شروع (اختیاری)**\n\n" +
+                "از چه تاریخی کوپن فعال شود؟\n\n" +
+                "📝 **فرمت تاریخ شمسی:**\n" +
+                "   1403/10/15\n" +
+                "   1403-10-15\n" +
+                "   1403/10/15 14:30\n\n" +
+                "📝 **فرمت تاریخ میلادی:**\n" +
+                "   2025-01-06\n" +
+                "   2025/01/06 14:30\n\n" +
+                "⏭ یا روی دکمه «رد کردن» بزنید تا الان فعال شود" },
+            { BotLanguage.English, "📅 **Step 4: Start Date (Optional)**\n\n" +
+                "When should the coupon become active?\n\n" +
+                "📝 **Date Format:**\n" +
+                "   2025-01-06\n" +
+                "   2025/01/06 14:30\n\n" +
+                "⏭ Or click «Skip» to activate now" }
+        },
+        ["coupon.create.enter_valid_to"] = new()
+        {
+            { BotLanguage.Persian, "📅 **مرحله 5: تاریخ پایان (اختیاری)**\n\n" +
+                "تا چه تاریخی کوپن معتبر باشد؟\n\n" +
+                "📝 **فرمت تاریخ شمسی:**\n" +
+                "   1403/12/29\n" +
+                "   1403-12-29\n" +
+                "   1403/12/29 23:59\n\n" +
+                "📝 **فرمت تاریخ میلادی:**\n" +
+                "   2025-03-20\n" +
+                "   2025/03/20 23:59\n\n" +
+                "⏭ یا روی دکمه «رد کردن» بزنید برای کوپن بدون تاریخ انقضا" },
+            { BotLanguage.English, "📅 **Step 5: End Date (Optional)**\n\n" +
+                "Until when should the coupon be valid?\n\n" +
+                "📝 **Date Format:**\n" +
+                "   2025-03-20\n" +
+                "   2025/03/20 23:59\n\n" +
+                "⏭ Or click «Skip» for no expiration" }
+        },
+        ["coupon.create.enter_max_uses"] = new()
+        {
+            { BotLanguage.Persian, "🔢 **مرحله 6: حداکثر تعداد استفاده (اختیاری)**\n\n" +
+                "چند نفر می‌توانند از این کوپن استفاده کنند؟\n\n" +
+                "📝 مثال: 100 (فقط 100 نفر اول)\n" +
+                "♾️ یا روی دکمه «نامحدود» بزنید\n\n" +
+                "⚠️ توجه: هر کاربر فقط یک بار می‌تواند استفاده کند" },
+            { BotLanguage.English, "🔢 **Step 6: Max Uses (Optional)**\n\n" +
+                "How many people can use this coupon?\n\n" +
+                "📝 Example: 100 (first 100 users only)\n" +
+                "♾️ Or click «Unlimited» button\n\n" +
+                "⚠️ Note: Each user can use it only once" }
+        },
+        ["coupon.create.skip_date"] = new()
+        {
+            { BotLanguage.Persian, "⏭ رد کردن" },
+            { BotLanguage.English, "⏭ Skip" }
+        },
+        ["coupon.create.unlimited_uses"] = new()
+        {
+            { BotLanguage.Persian, "♾️ نامحدود" },
+            { BotLanguage.English, "♾️ Unlimited" }
+        },
+        ["coupon.create.success"] = new()
+        {
+            { BotLanguage.Persian, "✅ **کوپن با موفقیت ایجاد شد!**\n\n" +
+                "🎫 کد کوپن: **{0}**\n\n" +
+                "کاربران می‌توانند هنگام خرید از این کد استفاده کنند." },
+            { BotLanguage.English, "✅ **Coupon created successfully!**\n\n" +
+                "🎫 Coupon Code: **{0}**\n\n" +
+                "Users can use this code during checkout." }
+        },
+        ["coupon.create.error.invalid_code_format"] = new()
+        {
+            { BotLanguage.Persian, "❌ فرمت کد نامعتبر است!\n\n" +
+                "✅ فقط حروف انگلیسی و اعداد\n" +
+                "✅ حداقل 3، حداکثر 20 کاراکتر\n" +
+                "✅ بدون فاصله\n\n" +
+                "مثال صحیح: WINTER50" },
+            { BotLanguage.English, "❌ Invalid code format!\n\n" +
+                "✅ Letters and numbers only\n" +
+                "✅ Min 3, Max 20 characters\n" +
+                "✅ No spaces\n\n" +
+                "Valid example: WINTER50" }
+        },
+        ["coupon.create.error.code_required"] = new()
+        {
+            { BotLanguage.Persian, "❌ لطفاً کد کوپن را وارد کنید." },
+            { BotLanguage.English, "❌ Please enter a coupon code." }
+        },
+        ["coupon.create.error.invalid_discount"] = new()
+        {
+            { BotLanguage.Persian, "❌ درصد تخفیف نامعتبر است!\n\n" +
+                "باید یک عدد بین 1 تا 100 وارد کنید.\n\n" +
+                "مثال: 20 (برای 20% تخفیف)" },
+            { BotLanguage.English, "❌ Invalid discount percentage!\n\n" +
+                "Must be a number between 1 and 100.\n\n" +
+                "Example: 20 (for 20% OFF)" }
+        },
+        ["coupon.create.error.invalid_date_format"] = new()
+        {
+            { BotLanguage.Persian, "❌ فرمت تاریخ نامعتبر است!\n\n" +
+                "**فرمت‌های معتبر شمسی:**\n" +
+                "• 1403/10/15\n" +
+                "• 1403-10-15\n" +
+                "• 1403/10/15 14:30\n\n" +
+                "**فرمت‌های معتبر میلادی:**\n" +
+                "• 2025-01-06\n" +
+                "• 2025/01/06 14:30" },
+            { BotLanguage.English, "❌ Invalid date format!\n\n" +
+                "**Valid formats:**\n" +
+                "• 2025-01-06\n" +
+                "• 2025/01/06 14:30\n" +
+                "• 2025-01-06T14:30:00" }
+        },
+        ["coupon.create.error.invalid_max_uses"] = new()
+        {
+            { BotLanguage.Persian, "❌ تعداد استفاده نامعتبر است!\n\n" +
+                "باید یک عدد مثبت وارد کنید.\n\n" +
+                "مثال: 100" },
+            { BotLanguage.English, "❌ Invalid max uses!\n\n" +
+                "Must be a positive number.\n\n" +
+                "Example: 100" }
+        },
+        
+        // OLD KEYS (KEEP FOR BACKWARD COMPATIBILITY)
         ["coupon.create.code_prompt"] = new()
         {
             { BotLanguage.Persian, "🎫 کد کوپن را وارد کنید:\n\n" +

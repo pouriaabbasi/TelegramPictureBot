@@ -2,6 +2,7 @@ using Telegram.Bot.Types;
 using TelegramPhotoBot.Application.DTOs;
 using TelegramPhotoBot.Domain.Enums;
 using System.Globalization;
+using MD.PersianDateTime;
 
 namespace TelegramPhotoBot.Presentation.Handlers;
 
@@ -10,6 +11,81 @@ namespace TelegramPhotoBot.Presentation.Handlers;
 /// </summary>
 public partial class TelegramUpdateHandler
 {
+    /// <summary>
+    /// Parses date string supporting both Persian (Jalali) and Gregorian formats
+    /// </summary>
+    private DateTime? ParseDateInput(string? input)
+    {
+        if (string.IsNullOrWhiteSpace(input))
+            return null;
+
+        input = input.Trim();
+
+        // Try Persian (Jalali) date formats
+        try
+        {
+            // Format: 1403/10/15 or 1403-10-15
+            if (input.Contains('/') || input.Contains('-'))
+            {
+                var parts = input.Split(new[] { '/', '-', ' ' }, StringSplitOptions.RemoveEmptyEntries);
+                
+                if (parts.Length >= 3)
+                {
+                    var year = int.Parse(parts[0]);
+                    var month = int.Parse(parts[1]);
+                    var day = int.Parse(parts[2]);
+                    
+                    // Check if it's a Persian year (1300-1500 range)
+                    if (year >= 1300 && year <= 1500)
+                    {
+                        var persianDate = new PersianDateTime(year, month, day);
+                        
+                        // Parse time if provided
+                        if (parts.Length >= 5 && parts.Length <= 6)
+                        {
+                            var hour = int.Parse(parts[3]);
+                            var minute = int.Parse(parts[4]);
+                            persianDate = new PersianDateTime(year, month, day, hour, minute, 0);
+                        }
+                        
+                        return persianDate.ToDateTime();
+                    }
+                }
+            }
+        }
+        catch
+        {
+            // Continue to try Gregorian format
+        }
+
+        // Try Gregorian date formats
+        var gregorianFormats = new[]
+        {
+            "yyyy-MM-dd",
+            "yyyy/MM/dd",
+            "yyyy-MM-dd HH:mm",
+            "yyyy/MM/dd HH:mm",
+            "yyyy-MM-dd HH:mm:ss",
+            "yyyy/MM/dd HH:mm:ss",
+            "yyyy-MM-ddTHH:mm:ss"
+        };
+
+        foreach (var format in gregorianFormats)
+        {
+            if (DateTime.TryParseExact(input, format, CultureInfo.InvariantCulture, DateTimeStyles.None, out var gregDate))
+            {
+                return gregDate;
+            }
+        }
+
+        // Last attempt: try culture-aware parsing
+        if (DateTime.TryParse(input, CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsedDate))
+        {
+            return parsedDate;
+        }
+
+        return null;
+    }
     /// <summary>
     /// Handles coupon code input
     /// </summary>
@@ -51,6 +127,8 @@ public partial class TelegramUpdateHandler
         }
         catch (Exception ex)
         {
+            Console.WriteLine($"❌ Coupon creation error: {ex.Message}");
+            Console.WriteLine($"❌ Stack trace: {ex.StackTrace}");
             var errorMsg = await _localizationService.GetStringAsync("common.error", cancellationToken);
             await _telegramBotService.SendMessageAsync(chatId, errorMsg, cancellationToken);
         }
@@ -104,6 +182,8 @@ public partial class TelegramUpdateHandler
         }
         catch (Exception ex)
         {
+            Console.WriteLine($"❌ Coupon creation error: {ex.Message}");
+            Console.WriteLine($"❌ Stack trace: {ex.StackTrace}");
             var errorMsg = await _localizationService.GetStringAsync("common.error", cancellationToken);
             await _telegramBotService.SendMessageAsync(chatId, errorMsg, cancellationToken);
         }
@@ -143,6 +223,8 @@ public partial class TelegramUpdateHandler
         }
         catch (Exception ex)
         {
+            Console.WriteLine($"❌ Coupon creation error: {ex.Message}");
+            Console.WriteLine($"❌ Stack trace: {ex.StackTrace}");
             var errorMsg = await _localizationService.GetStringAsync("common.error", cancellationToken);
             await _telegramBotService.SendMessageAsync(chatId, errorMsg, cancellationToken);
         }
@@ -159,13 +241,14 @@ public partial class TelegramUpdateHandler
 
             if (!string.IsNullOrWhiteSpace(input))
             {
-                if (!DateTime.TryParse(input, CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsedDate))
+                validFrom = ParseDateInput(input);
+                
+                if (validFrom == null)
                 {
                     var errorMsg = await _localizationService.GetStringAsync("coupon.create.error.invalid_date_format", cancellationToken);
                     await _telegramBotService.SendMessageAsync(chatId, errorMsg, cancellationToken);
                     return;
                 }
-                validFrom = parsedDate;
             }
 
             // Ask for valid to date (optional)
@@ -188,13 +271,15 @@ public partial class TelegramUpdateHandler
             await _userStateRepository.SetStateAsync(
                 userId,
                 UserStateType.CreatingCouponValidTo,
-                $"{stateData}|{validFrom?.ToString("yyyy-MM-dd") ?? "null"}",
+                $"{stateData}|{validFrom?.ToString("yyyy-MM-dd HH:mm:ss") ?? "null"}",
                 10,
                 cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
         }
         catch (Exception ex)
         {
+            Console.WriteLine($"❌ Coupon creation error: {ex.Message}");
+            Console.WriteLine($"❌ Stack trace: {ex.StackTrace}");
             var errorMsg = await _localizationService.GetStringAsync("common.error", cancellationToken);
             await _telegramBotService.SendMessageAsync(chatId, errorMsg, cancellationToken);
         }
@@ -211,13 +296,14 @@ public partial class TelegramUpdateHandler
 
             if (!string.IsNullOrWhiteSpace(input))
             {
-                if (!DateTime.TryParse(input, CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsedDate))
+                validTo = ParseDateInput(input);
+                
+                if (validTo == null)
                 {
                     var errorMsg = await _localizationService.GetStringAsync("coupon.create.error.invalid_date_format", cancellationToken);
                     await _telegramBotService.SendMessageAsync(chatId, errorMsg, cancellationToken);
                     return;
                 }
-                validTo = parsedDate;
             }
 
             // Ask for max uses (optional)
@@ -240,13 +326,15 @@ public partial class TelegramUpdateHandler
             await _userStateRepository.SetStateAsync(
                 userId,
                 UserStateType.CreatingCouponMaxUses,
-                $"{stateData}|{validTo?.ToString("yyyy-MM-dd") ?? "null"}",
+                $"{stateData}|{validTo?.ToString("yyyy-MM-dd HH:mm:ss") ?? "null"}",
                 10,
                 cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
         }
         catch (Exception ex)
         {
+            Console.WriteLine($"❌ Coupon creation error: {ex.Message}");
+            Console.WriteLine($"❌ Stack trace: {ex.StackTrace}");
             var errorMsg = await _localizationService.GetStringAsync("common.error", cancellationToken);
             await _telegramBotService.SendMessageAsync(chatId, errorMsg, cancellationToken);
         }
